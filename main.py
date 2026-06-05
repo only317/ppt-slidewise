@@ -171,6 +171,9 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
                 sessions = session_mgr.list_sessions()
                 await ws.send_json({"type": "session_list", "data": sessions})
 
+            elif msg_type == MessageType.RESUME_SESSION:
+                await _handle_resume(ws, executor, session_id)
+
             else:
                 await ws.send_json({
                     "type": "error",
@@ -189,6 +192,53 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
         except Exception:
             pass
 
+
+# ---------------------------------------------------------------------------
+# Session resume
+# ---------------------------------------------------------------------------
+
+async def _handle_resume(ws: WebSocket, executor: SandboxedExecutor, session_id: str):
+    """Restore session state after page reload."""
+    phase = session_mgr.get_phase(session_id)
+    state_data: dict = {"session_id": session_id, "phase": phase}
+
+    # Restore outline if available
+    try:
+        outline_raw = executor.read_file("outline_confirmed.json")
+        outline = json.loads(outline_raw)
+        pages = [
+            OutlinePage(
+                index=p.get("index", i + 1),
+                title=p.get("title", ""),
+                layout=p.get("layout", "L3"),
+                bullets=p.get("bullets", []),
+                notes=p.get("notes", ""),
+            )
+            for i, p in enumerate(outline.get("pages", []))
+        ]
+        state_data["outline"] = OutlinePayload(
+            pages=pages,
+            design_spec=outline.get("meta", {}),
+            meta=outline.get("meta", {}),
+        ).model_dump()
+    except Exception:
+        pass
+
+    # Restore existing SVGs
+    slides_dir = executor._safe_path("svg_output")
+    if slides_dir.exists():
+        slides = {}
+        for svg_file in sorted(slides_dir.glob("slide_*.svg")):
+            try:
+                idx = int(svg_file.stem.split("_")[1])
+                slides[str(idx)] = svg_file.read_text(encoding="utf-8")
+            except (ValueError, IndexError):
+                pass
+        if slides:
+            state_data["slides"] = slides
+
+    await ws.send_json({"type": "state_sync", "data": state_data})
+    logger.info(f"Session {session_id} resumed at phase '{phase}'")
 
 # ---------------------------------------------------------------------------
 # Pipeline handlers
@@ -739,7 +789,21 @@ async def _periodic_cleanup():
 # Entry point
 # ---------------------------------------------------------------------------
 
+def _validate_env():
+    """Check required environment variables at startup."""
+    missing = []
+    if not os.getenv("DEEPSEEK_API_KEY"):
+        missing.append("DEEPSEEK_API_KEY")
+    if missing:
+        logger.error(f"Missing environment variables: {', '.join(missing)}")
+        logger.error("Create a .env file or set them in your shell.")
+        logger.error("  cp .env.example .env &&  # then edit .env with your keys")
+        sys.exit(1)
+    logger.info("Environment validated ✓")
+
 if __name__ == "__main__":
+    _validate_env()
     import uvicorn
     port = int(os.getenv("SLIDEWISE_PORT", "8888"))
+    logger.info(f"Starting SlideWise on http://127.0.0.1:{port}")
     uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)
