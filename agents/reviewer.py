@@ -60,7 +60,9 @@ YOU MUST examine the raw SVG XML source code for each slide.
 - `read_reference(path)` — read constraint definitions
 
 ## Output Format
-Return ONLY a JSON object (no markdown, no explanation):
+After examining all SVGs, output ONLY a raw JSON object on a single line.
+No markdown fences, no ```json``` wrapper, no explanation text before or after the JSON.
+The entire response must start with { and end with }.
 
 ```json
 {
@@ -106,7 +108,7 @@ class ReviewerAgent(BaseAgent):
     system_prompt = REVIEWER_SYSTEM_PROMPT
     chat_tools = REVIEWER_TOOLS
     temperature = 0.2  # lower temp for more consistent auditing
-    use_json_mode = True
+    use_json_mode = False  # tools + json_mode conflict; parse from text instead
 
     def __init__(self, executor: SandboxedExecutor):
         super().__init__(executor)

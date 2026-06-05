@@ -37,8 +37,16 @@ natively-editable PowerPoint presentation. You determine:
 - `write_file(path, content)` — write design_spec.md or other files
 
 ## Constraint System (READ FIRST)
-Use `read_reference("constraints/guizang.py")` to load the full palette (indigo/ink/forest/dune),
-typography (H1 72-96 / H2 48-64 / H3 36-48 / Body 14-18 / Meta 10-12),
+Use `read_reference("constraints/guizang.py")` to load the full palette system.
+
+**Dark palettes** (indigo / ink / forest / dune) — dark background, light text.
+  Best for: tech, AI, formal, creative presentations.
+
+**Swiss-light palettes** (klein-blue / lemon / lime / safety-orange) — light background,
+  dark text, single saturated anchor color. Pure Swiss Internationalism.
+  Best for: academic, product, news, clean minimal presentations.
+
+Typography (H1 72-96 / H2 48-64 / H3 36-48 / Body 14-18 / Meta 10-12),
 and layout template zone definitions (L1-L7).
 
 ## Page Count Rules
@@ -64,7 +72,7 @@ and layout template zone definitions (L1-L7).
 A complete Markdown design spec with these sections:
   I.   Project Information
   II.  Canvas Specification (1280×720, viewBox 0 0 1280 720)
-  III. Visual Theme (palette name, all HEX values, dark theme confirmation)
+  III. Visual Theme (palette name from: indigo/ink/forest/dune/klein-blue/lemon/lime/safety-orange, all HEX values, bg mode: dark|light)
   IV.  Typography System (H1-H3-Body-Meta hierarchy, font families)
   V.   Layout Principles (grid, spacing, zone usage)
   VI.  Icon Usage Spec (library: chunk, search keywords)

@@ -15,7 +15,7 @@ import shutil
 import sys
 import traceback
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 # Load .env file
 _ENV_PATH = Path(__file__).resolve().parent / ".env"

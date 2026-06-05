@@ -62,6 +62,46 @@ PALETTES: Dict[str, Palette] = {
     ),
 }
 
+# Swiss-light palettes — Guizang B-style original: light bg + single saturated accent
+PALETTES.update({
+    "klein-blue": Palette(
+        name="克莱因蓝 Klein Blue",
+        background="#f5f4f0",
+        text_primary="#1a1a1c",
+        anchor="#002FA7",
+        text_secondary="#6b6b6e",
+        surface="#ebeae6",
+        divider="#d6d4cf",
+    ),
+    "lemon": Palette(
+        name="柠檬黄 Lemon Yellow",
+        background="#f5f4f0",
+        text_primary="#1a1a1c",
+        anchor="#c8a200",
+        text_secondary="#6b6b6e",
+        surface="#ebeae6",
+        divider="#d6d4cf",
+    ),
+    "lime": Palette(
+        name="柠绿 Lime Green",
+        background="#f5f4f0",
+        text_primary="#1a1a1c",
+        anchor="#7a9900",
+        text_secondary="#6b6b6e",
+        surface="#ebeae6",
+        divider="#d6d4cf",
+    ),
+    "safety-orange": Palette(
+        name="安全橙 Safety Orange",
+        background="#f5f4f0",
+        text_primary="#1a1a1c",
+        anchor="#d45a2e",
+        text_secondary="#6b6b6e",
+        surface="#ebeae6",
+        divider="#d6d4cf",
+    ),
+})
+
 # Hard rules (validated by Reviewer + ConstraintValidator)
 FORBIDDEN_COLORS = {"#FFFFFF", "#ffffff", "#000000", "#000000"}
 MAX_ANCHOR_ELEMENTS_PER_PAGE = 1
