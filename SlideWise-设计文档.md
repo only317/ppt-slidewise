@@ -412,7 +412,7 @@ SVG字符串
 
 **DDL：6月10日晚23:59**（提交报告PDF+汇报PPT压缩包）
 
-### 9.2 Person A — 后端 & Agent核心 ｜ 程韵博
+### 9.2 Person A — 后端 & Agent核心 
 
 **核心职责**：Python后端、DeepSeek Agent集成、SVG→PPTX编译器
 
@@ -430,7 +430,7 @@ SVG字符串
 
 **总预计**：P0约12-16小时，P1约3-4小时，P2约1.5小时
 
-### 9.3 Person B — 前端 & UX ｜ （合作者姓名）
+### 9.3 Person B — 前端 & UX 
 
 **核心职责**：浏览器界面、WebSocket通信、视觉体验
 

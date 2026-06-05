@@ -6,3 +6,7 @@ sessions/
 .venv/
 venv/
 node_modules/
+frontend/dist/
+frontend/node_modules/
+*.log
+.DS_Store

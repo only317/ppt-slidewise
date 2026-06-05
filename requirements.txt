@@ -1,0 +1,36 @@
+# SlideWise - Agent-driven PPT generation
+# ========================================
+
+# Web Framework
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+websockets>=12.0
+
+# LLM API (DeepSeek via OpenAI-compatible)
+openai>=1.30.0
+
+# PPTX Generation (ppt-master engine)
+python-pptx>=0.6.21
+svglib>=1.5.0
+reportlab>=4.0.0
+
+# PDF/Document Parsing
+PyMuPDF>=1.23.0
+pdfplumber>=0.10.0
+mammoth>=1.6.0
+markdownify>=0.11.6
+
+# SVG/XML Processing
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+
+# Text Measurement & Image Processing
+Pillow>=9.0.0
+numpy>=1.20.0
+
+# Web Scraping (for source_to_md)
+requests>=2.31.0
+curl_cffi>=0.7.0
+
+# Optional: AI Image Generation
+google-genai>=1.0.0

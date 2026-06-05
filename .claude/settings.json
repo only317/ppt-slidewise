@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(python -X utf8 -c ' *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:zhuanlan.zhihu.com)",
+      "WebFetch(domain:blog.csdn.net)",
+      "WebFetch(domain:osp.io)",
+      "WebFetch(domain:m.python88.com)",
+      "WebFetch(domain:www.aipuzi.cn)",
+      "Bash(gh repo *)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:www.sourcepulse.org)",
+      "WebFetch(domain:36kr.com)",
+      "WebFetch(domain:www.163.com)",
+      "WebFetch(domain:openrouter.ai)",
+      "WebFetch(domain:www.gsmarena.com)",
+      "WebFetch(domain:hub.baai.ac.cn)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(mv docs/superpowers/specs/2026-06-03-slidewise-design.md ./SlideWise-设计文档.md)",
+      "Bash(rm -rf docs/superpowers/specs)",
+      "Bash(rmdir docs/superpowers)",
+      "Bash(rmdir docs *)",
+      "Bash(ls /tmp/PPT-creator/)",
+      "Read(//tmp/**)",
+      "Bash(xargs wc -l)"
+    ]
+  }
+}
