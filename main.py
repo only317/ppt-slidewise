@@ -850,6 +850,4 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("SLIDEWISE_PORT", "8888"))
     logger.info(f"Starting SlideWise on http://127.0.0.1:{port}")
-    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True,
-                reload_dirs=[str(PROJECT_ROOT)],
-                reload_excludes=["**/sessions/**", "**/exports/**", "**/*.pptx"])
+    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)
