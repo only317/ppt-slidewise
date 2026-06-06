@@ -29,7 +29,8 @@
       "Read(//tmp/**)",
       "Bash(xargs wc -l)",
       "Bash(git rm *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(python -c \"from sessions.manager import SessionManager; print\\([m for m in dir\\(SessionManager\\) if not m.startswith\\('_'\\)]\\)\")"
     ]
   }
 }

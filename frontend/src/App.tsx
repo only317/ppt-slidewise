@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
-import type { ServerMessage, SlideData, OutlineData, ReviewReportData, DoneData, UploadedFile } from './types/messages'
+import type { ServerMessage, SlideData, OutlineData, ReviewReportData, DoneData, UploadedFile, SessionSummary } from './types/messages'
 import { useWebSocket } from './hooks/useWebSocket'
 import { ChatPanel } from './components/ChatPanel'
 import { SlideGrid } from './components/SlideGrid'
@@ -86,7 +86,7 @@ export default function App() {
     }
   }, [toast, addStatus])
 
-  const { phase, connected, sendMessage, confirmOutline, fixDecisions, requestDownload } = useWebSocket(handleMessage)
+  const { phase, connected, sessions, sendMessage, confirmOutline, fixDecisions, requestDownload } = useWebSocket(handleMessage)
 
   const handleFiles = useCallback(async (files: FileList) => {
     const result: UploadedFile[] = []
@@ -150,6 +150,7 @@ export default function App() {
       <ChatPanel
         phase={phase}
         connected={connected}
+        sessions={sessions}
         outline={outline}
         review={review}
         done={done}

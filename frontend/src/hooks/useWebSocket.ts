@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
-import type { PipelinePhase, ServerMessage, UploadedFile } from '../types/messages'
+import type { PipelinePhase, ServerMessage, UploadedFile, SessionSummary } from '../types/messages'
 
 type MessageHandler = (msg: ServerMessage) => void
 
@@ -11,7 +11,14 @@ export function useWebSocket(onMessage: MessageHandler) {
   const wsRef = useRef<WebSocket | null>(null)
   const [phase, setPhase] = useState<PipelinePhase>('idle')
   const [connected, setConnected] = useState(false)
+  const [sessions, setSessions] = useState<SessionSummary[]>([])
   const sidRef = useRef(getSessionId())
+
+  const requestSessionList = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'list_sessions', data: {} }))
+    }
+  }, [])
 
   const connect = useCallback(() => {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -24,6 +31,7 @@ export function useWebSocket(onMessage: MessageHandler) {
       if (sidRef.current !== 'new') {
         ws.send(JSON.stringify({ type: 'resume_session', data: { session_id: sidRef.current } }))
       }
+      setTimeout(requestSessionList, 200)
     }
 
     ws.onmessage = (e) => {
@@ -39,6 +47,7 @@ export function useWebSocket(onMessage: MessageHandler) {
         else if (msg.type === 'review_report') setPhase('reviewing')
         else if (msg.type === 'done') setPhase('done')
         else if (msg.type === 'error' && !msg.data.recoverable) setPhase('idle')
+        else if (msg.type === 'session_list') setSessions(msg.data)
         onMessage(msg)
       } catch {
         // ignore parse errors
@@ -73,5 +82,5 @@ export function useWebSocket(onMessage: MessageHandler) {
     send({ type: 'download', data: {} })
   }, [send])
 
-  return { phase, connected, sidRef, sendMessage, confirmOutline, fixDecisions, requestDownload }
+  return { phase, connected, sidRef, sessions, sendMessage, confirmOutline, fixDecisions, requestDownload, requestSessionList }
 }

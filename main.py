@@ -199,7 +199,8 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
 
 async def _handle_resume(ws: WebSocket, executor: SandboxedExecutor, session_id: str):
     """Restore session state after page reload."""
-    phase = session_mgr.get_phase(session_id)
+    state = session_mgr.get_state(session_id)
+    phase = state.get("phase", "idle") if state else "idle"
     state_data: dict = {"session_id": session_id, "phase": phase}
 
     # Restore outline if available

@@ -1,4 +1,5 @@
-import type { PipelinePhase, OutlineData, ReviewReportData, DoneData } from '../types/messages'
+import { useState, useRef, useEffect } from 'react'
+import type { PipelinePhase, OutlineData, ReviewReportData, DoneData, SessionSummary } from '../types/messages'
 import { ChatMessage } from './ChatMessage'
 import { DesignPreview } from './DesignPreview'
 import { OutlineEditor } from './OutlineEditor'
@@ -10,6 +11,7 @@ interface FileTag { name: string }
 interface Props {
   phase: PipelinePhase
   connected: boolean
+  sessions: SessionSummary[]
   outline: OutlineData | null
   review: ReviewReportData | null
   done: DoneData | null
@@ -27,6 +29,10 @@ interface Props {
   onDismissError: (index: number) => void
 }
 
+const PHASE_CN: Record<string, string> = {
+  idle: '空闲', planning: '规划中', generating: '生成中', reviewing: '审查中', done: '已完成',
+}
+
 const PHASE_LABELS: Record<string, string> = {
   planning: '正在分析内容，规划大纲…',
   generating: '正在生成幻灯片…',
@@ -34,23 +40,63 @@ const PHASE_LABELS: Record<string, string> = {
 }
 
 export function ChatPanel({
-  phase, connected, outline, review, done, errors, statusMessages,
+  phase, connected, sessions, outline, review, done, errors, statusMessages,
   styleTag, fileTags, onStyleTagChange, onRemoveFile,
   onSend, onFilesAdded, onConfirmOutline, onFix, onSkipReview, onDismissError,
 }: Props) {
   const showWelcome = phase === 'idle' && !outline
+  const [showSessions, setShowSessions] = useState(false)
+  const popRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) setShowSessions(false)
+    }
+    if (showSessions) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showSessions])
+
+  const currentId = new URLSearchParams(window.location.search).get('session') || 'new'
 
   return (
     <div id="chat-panel">
       <div id="chat-header">
         <span className="logo">SlideWise</span>
         <span className="accent-line" />
-        <span className="status">
-          {connected
-            ? <><span className="indicator" /> 就绪</>
-            : <span style={{color:'var(--accent-err)'}}>断开</span>
-          }
-        </span>
+        <div className="header-actions">
+          <button className="btn-new-chat" title="新建对话"
+            onClick={() => { window.location.href = '/?session=new' }}>
+            + 新建
+          </button>
+          <div className="session-picker-wrap" ref={popRef}>
+            <button className="btn-sessions" title="历史记录"
+              onClick={() => setShowSessions(!showSessions)} disabled={sessions.length === 0}>
+              &#9776;
+            </button>
+            {showSessions && sessions.length > 0 && (
+              <div className="session-popover">
+                <div className="session-pop-title">历史会话</div>
+                {sessions.map(s => (
+                  <div key={s.session_id}
+                    className={`session-item${s.session_id === currentId ? ' active' : ''}`}
+                    onClick={() => { window.location.href = `/?session=${s.session_id}` }}>
+                    <span className="si-phase">{PHASE_CN[s.phase] || s.phase}</span>
+                    <span className="si-info">
+                      {s.slides_generated}/{s.slides_total} 页
+                      {s.created_at && <span className="si-time">{new Date(s.created_at).toLocaleString('zh-CN')}</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <span className="status">
+            {connected
+              ? <><span className="indicator" /> 就绪</>
+              : <span style={{color:'var(--accent-err)'}}>断开</span>
+            }
+          </span>
+        </div>
       </div>
 
       <div id="chat-messages">
