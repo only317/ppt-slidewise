@@ -5,19 +5,20 @@ interface FileTag { name: string }
 interface StyleItem { id: string; name: string; hex: string; desc: string; family: 'A' | 'B' }
 
 const STYLES: { family: string; label: string; desc: string; items: StyleItem[] }[] = [
-  { family: 'A', label: '电子杂志 × 电子墨水', desc: '暗底、衬线标题、叙事节奏 —— 适合观点分享、个人表达',
+  { family: 'A', label: '电子杂志 × 电子墨水', desc: 'Hero暗底 + 内容暖白底交替 — 杂志呼吸感',
     items: [
-      { id: 'ink', name: '墨水', hex: '#c9a96e', desc: '深邃·权威·叙事', family: 'A' },
-      { id: 'indigo', name: '靛蓝瓷', hex: '#4a90d9', desc: '科技·AI·研究', family: 'A' },
-      { id: 'forest', name: '森林墨', hex: '#7a9a6e', desc: '自然·文化·跨学科', family: 'A' },
-      { id: 'dune', name: '沙丘', hex: '#d4956a', desc: '怀旧·人文·创意', family: 'A' },
+      { id: 'ink', name: '墨水经典', hex: '#0a0a0b', desc: '墨黑+暖白 · 通用', family: 'A' },
+      { id: 'indigo', name: '靛蓝瓷', hex: '#0a1f3d', desc: '深蓝+瓷白 · 科技', family: 'A' },
+      { id: 'forest', name: '森林墨', hex: '#1a2e1f', desc: '墨绿+象牙 · 自然', family: 'A' },
+      { id: 'kraft', name: '牛皮纸', hex: '#2a1e13', desc: '深棕+暖米 · 人文', family: 'A' },
+      { id: 'dune', name: '沙丘', hex: '#1f1a14', desc: '炭灰+沙色 · 艺术', family: 'A' },
     ]},
-  { family: 'B', label: '瑞士国际主义', desc: '白底、单一锚点色、网格至上、极简直角 —— 适合产品分析、方法论',
+  { family: 'B', label: '瑞士国际主义', desc: '统一暖白底 + 单一高饱和锚点色 — 极简理性',
     items: [
-      { id: 'klein-blue', name: '克莱因蓝', hex: '#002FA7', desc: '学术·纯净·产品', family: 'B' },
-      { id: 'lemon', name: '柠檬黄', hex: '#FFD500', desc: '年轻·零售·Y2K', family: 'B' },
-      { id: 'lime', name: '柠绿', hex: '#C5E803', desc: '生态·健康·Z世代', family: 'B' },
-      { id: 'safety-orange', name: '安全橙', hex: '#FF6B35', desc: '新闻·运动·工业', family: 'B' },
+      { id: 'klein-blue', name: '克莱因蓝 IKB', hex: '#002FA7', desc: '学术 · AI · 通用', family: 'B' },
+      { id: 'lemon', name: '柠檬黄', hex: '#FFD500', desc: '年轻 · 运动 · Y2K', family: 'B' },
+      { id: 'lime', name: '柠绿', hex: '#C5E803', desc: '生态 · 未来 · Z世代', family: 'B' },
+      { id: 'safety-orange', name: '安全橙', hex: '#FF6B35', desc: '工业 · 新闻 · 运动', family: 'B' },
     ]},
 ]
 

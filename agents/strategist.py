@@ -61,26 +61,28 @@ When the user uploads a ZIP or provides a GitHub URL (repo at sources/repo/):
 - Setup & Run (L3): install, configure, run — extracted from README or config files
 
 ## Constraint System (READ FIRST)
-Use `read_reference("constraints/guizang.py")` to load the full palette system.
+Use `read_reference("constraints/guizang.py")` to load the full palette and layout system.
 
-**Style A — 电子杂志 × 电子墨水** (ink / indigo / forest / dune):
-  Dark backgrounds (#0a...), warm light text, editorial magazine feel.
-  Use serif-like weight hierarchy. Hero pages alternate with content pages.
+**Style A — 电子杂志 × 电子墨水** (ink/indigo/forest/kraft/dune):
+  Hero pages (L1封面/L2章节/L7封底) → dark ink background + light text.
+  Content pages (L3/L4/L5/L6) → warm paper background + dark ink text.
+  Alternating hero/content rhythm creates magazine breathing effect.
   Best for: 叙事、观点、分享、个人风格表达
 
-**Style B — 瑞士国际主义** (klein-blue / lemon / lime / safety-orange):
-  Light background (#fafaf8), dark text (#1a1a1c), ONE saturated anchor color.
-  Grid-first, sharp corners, hairline rules, extreme font-size contrast.
-  Best for: 事实、产品、分析、方法论表达
+**Style B — 瑞士国际主义** (klein-blue/lemon/lime/safety-orange):
+  ALL pages → unified warm off-white paper (#fafaf8) + near-black text.
+  ONE saturated anchor color per deck. Grid-first, sharp corners, hairline rules.
+  Extreme font-size contrast (≥8:1 H1:Body). No gradients/shadows/rounded corners.
+  Best for: 事实、产品、分析、方法论
 
 ## Style Selection
-- If the user says "暗色" / "深色" / "杂志风" / "叙事" → pick a Style A palette
-- If the user says "亮色" / "白色" / "瑞士" / "极简" / "学术" → pick a Style B palette
-- If the user mentions a specific color (蓝/金/绿/橙/黄) → match to closest palette
-- Default: indigo for tech/AI topics, klein-blue for academic, ink for general
+- "杂志感" / "人文" / "Monocle" / 不指定 → Style A, 推荐 ink
+- "瑞士风" / "Swiss" / "极简" / "数据" / "产品分析" → Style B, 推荐 klein-blue
+- 科技/AI/组会 → Style A indigo or Style B klein-blue
+- 水课 → Style A ink (默认)
+- User mentions specific color → match to closest
 
-Typography (H1 72-96 / H2 48-64 / H3 36-48 / Body 14-18 / Meta 10-12),
-and layout template zone definitions (L1-L7).
+Typography: H1(72-96) / H2(48-64) / H3(36-48) / Body(14-18) / Meta(10-12)
 
 ## Page Count Rules
 - Analyze source content VOLUME objectively

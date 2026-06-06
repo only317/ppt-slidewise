@@ -75,7 +75,9 @@ class ConstraintValidator:
         self.palette = PALETTES.get(palette_name, PALETTES["indigo"])
         self._allowed_hex: Set[str] = {
             self.palette.background.lower(),
-            self.palette.text_primary.lower(),
+            self.palette.paper.lower(),
+            self.palette.ink.lower(),
+            self.palette.text_on_paper.lower(),
             self.palette.anchor.lower(),
             self.palette.text_secondary.lower(),
             self.palette.surface.lower(),
@@ -180,7 +182,7 @@ class ConstraintValidator:
                     page_index=page_index, severity="error",
                     category="style",
                     description=f"Forbidden color {c} — pure black/white not allowed in Guizang",
-                    suggested_fix=f"Use {self.palette.background} for dark, {self.palette.text_primary} for light"
+                    suggested_fix=f"Use {self.palette.paper} for background, {self.palette.ink} for text"
                 ))
 
         anchor_count = sum(

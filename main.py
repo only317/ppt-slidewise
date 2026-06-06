@@ -420,6 +420,7 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
                     design_spec=design_spec if retry == 0 else "",
                     page_outline=page,
                     previous_slides=previous_slides,
+                    palette=palette,
                 )
                 svg_response = await asyncio.to_thread(gen_agent.run, user_prompt)
 

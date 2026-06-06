@@ -90,17 +90,27 @@ L7 BACK COVER: Title at (100,280) 1080×100 centered, subtitle at (100,400), met
 - Meta (page numbers): 12px, Medium
 - H3/Body ratio: 40/18 = 2.2 ≥ 2.0 ✓
 
-## COLOR PALETTE (from constraints/guizang.py)
-Read the file for exact HEX values. Never use #FFFFFF or #000000.
+## COLOR PALETTE — PER-PAGE BACKGROUND RULES
+Read constraints/guizang.py for exact HEX values. Never use #FFFFFF or #000000.
 
-**Style A (暗底电子杂志)**: Dark background (#0a...) + light warm text (#f1...).
-  The anchor color is used for accents: bullet markers, section numbers, hero data.
-  Background fills the entire 1280×720 with palette.background.
+**PER-PAGE BACKGROUND: call get_page_colors(palette, layout) to determine colors.**
 
-**Style B (白底瑞士国际主义)**: Light background (#fafaf8) + dark text (#1a1a1c).
-  The anchor color is the ONLY saturated color on the page — use it sparingly for
-  bullet markers, section numbers, hero data. All other elements use text_primary
-  or text_secondary. Background is palette.background (NOT white).
+Style A themes (ink/indigo/forest/kraft/dune):
+  - L1 (封面) and L2 (章节) and L7 (封底) are HERO pages:
+    background = palette.background (dark ink color)
+    text = palette.ink (light paper color)
+  - L3/L4/L5/L6 are CONTENT pages:
+    background = palette.paper (light warm paper)
+    text = palette.text_on_paper (dark ink color)
+  Example: ink theme → L1 bg=#0a0a0b text=#f1efea, L3 bg=#f1efea text=#0a0a0b
+
+Style B themes (klein-blue/lemon/lime/safety-orange):
+  - ALL pages use the SAME light background:
+    background = palette.paper (#fafaf8 warm off-white)
+    text = palette.ink (#0a0a0a near-black)
+  - The anchor color is the ONLY saturated element — use sparingly for
+    bullet markers, section numbers, hero data, thin accent lines.
+  - All other elements use palette.ink or palette.text_secondary.
 
 ## TEXT CONTENT RULES
 - Every text element MUST contain real, meaningful content
@@ -177,6 +187,7 @@ class GeneratorAgent(BaseAgent):
         page_outline: dict,
         previous_slides: Optional[List[dict]] = None,
         review_feedback: Optional[str] = None,
+        palette: str = "indigo",
     ) -> str:
         """Build the user message for a single page generation."""
 
@@ -203,6 +214,13 @@ class GeneratorAgent(BaseAgent):
         layout = page_outline.get("layout", "L3")
         bullets = page_outline.get("bullets", [])
         notes = page_outline.get("notes", "")
+
+        # Per-page color hint
+        from constraints.guizang import get_page_colors
+        colors = get_page_colors(palette, layout)
+        parts.append(f"## COLORS FOR THIS PAGE\n"
+                     f"Background: {colors['bg']} | Text: {colors['text']} | "
+                     f"Accent: {colors['anchor']}")
 
         parts.append(f"## CURRENT PAGE — Slide {idx}")
         parts.append(f"Title: {title}")

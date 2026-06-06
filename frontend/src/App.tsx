@@ -119,7 +119,7 @@ export default function App() {
     let fullText = text
     if (styleTag && !text.includes(styleTag)) {
       const names: Record<string, string> = {
-        'indigo': '靛蓝瓷', 'ink': '墨水', 'forest': '森林墨', 'dune': '沙丘',
+        'ink': '墨水经典', 'indigo': '靛蓝瓷', 'forest': '森林墨', 'kraft': '牛皮纸', 'dune': '沙丘',
         'klein-blue': '克莱因蓝', 'lemon': '柠檬黄', 'lime': '柠绿', 'safety-orange': '安全橙',
       }
       fullText = `用${names[styleTag] || styleTag}风格。${text}`
