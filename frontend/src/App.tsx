@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef } from 'react'
 import type { ServerMessage, OutlineData, ReviewReportData, DoneData, UploadedFile } from './types/messages'
 import { useWebSocket } from './hooks/useWebSocket'
-import { ChatPanel, type ChatEntry } from './components/ChatPanel'
+import { ChatPanel } from './components/ChatPanel'
+import type { ChatEntry } from './components/ChatPanel'
 import { SlideGrid } from './components/SlideGrid'
 import { Lightbox } from './components/Lightbox'
 import { PhaseIndicator } from './components/PhaseIndicator'
@@ -76,9 +77,21 @@ export default function App() {
         if (!msg.data.recoverable) setDone(null)
         break
       case 'state_sync':
-        if (msg.data.outline) setOutline(msg.data.outline)
+        if (msg.data.outline) {
+          setOutline(msg.data.outline)
+          slideCount.current = msg.data.outline.pages?.length || 0
+        }
         if (msg.data.slides) setSlides(msg.data.slides)
         if (msg.data.review) setReview(msg.data.review)
+        // Rebuild chat from restored state (only if we don't have it yet)
+        setChatHistory(prev => {
+          if (prev.length > 1) return prev  // already restored
+          const h: ChatEntry[] = [{ role: 'assistant', type: 'welcome' as const }]
+          if (msg.data.outline) h.push({ role: 'assistant', type: 'outline', data: msg.data.outline as OutlineData })
+          if (msg.data.review) h.push({ role: 'assistant', type: 'review', data: msg.data.review as ReviewReportData })
+          h.push({ role: 'system', type: 'status', text: '会话已恢复' })
+          return h
+        })
         break
     }
   }, [toast, addChat])
