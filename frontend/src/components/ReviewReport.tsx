@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ReviewReportData } from '../types/messages'
 
 interface Props {
@@ -12,8 +13,7 @@ const SEV_LABELS: Record<string, string> = {
 
 export function ReviewReport({ report, onFix, onSkip }: Props) {
   const issues = report.issues || []
-  const [feedback, setFeedback] = (window as any).__reviewFeedback = (window as any).__reviewFeedback || ''
-  const setFb = (v: string) => { (window as any).__reviewFeedback = v }
+  const [feedback, setFeedback] = useState('')
 
   return (
     <div className="outline-card">
@@ -37,18 +37,18 @@ export function ReviewReport({ report, onFix, onSkip }: Props) {
 
       <textarea className="review-feedback-input"
         placeholder="补充修改意见（可选）…"
-        defaultValue={(window as any).__reviewFeedback || ''}
-        onChange={e => setFb(e.target.value)}
+        value={feedback}
+        onChange={e => setFeedback(e.target.value)}
         rows={2}
       />
 
       <div className="action-row">
         <button className="btn btn-success"
-          onClick={() => onFix(issues.map(i => i.page), [], (window as any).__reviewFeedback || '')}>
+          onClick={() => onFix(issues.map(i => i.page), [], feedback)}>
           修复全部问题
         </button>
         <button className="btn btn-warning"
-          onClick={() => onFix(issues.filter(i => i.severity === 'error').map(i => i.page), [], (window as any).__reviewFeedback || '')}>
+          onClick={() => onFix(issues.filter(i => i.severity === 'error').map(i => i.page), [], feedback)}>
           仅修复严重问题
         </button>
         <button className="btn btn-ghost" onClick={onSkip}>跳过 → 直接导出</button>
