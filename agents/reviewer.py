@@ -1,131 +1,85 @@
 """
-Reviewer Agent — layout & typography quality auditor.
+Reviewer Agent — content logic & information hierarchy auditor.
 
-Reads all generated SVGs, produces a structured issue report across
-four dimensions: style, layout, content, hierarchy.
-
-Layer 1 text overflow detection is done here via heuristic estimation.
-Layer 2 (PIL precise measurement) runs separately in the engine.
+Receives slide content summaries inline (no tool calls needed).
+Programmatic checks (color, typography, overflow) run separately via ConstraintValidator.
 """
 
 import json
 import re
 from typing import Any, Dict, List
 
-from .base import BaseAgent, SandboxedExecutor, make_tool
+from .base import BaseAgent, SandboxedExecutor
 
-REVIEWER_SYSTEM_PROMPT = """You are a presentation design auditor — the quality gatekeeper
-for Swiss International Style slides. Review SVG source code and report issues.
+REVIEWER_SYSTEM_PROMPT = """You are a presentation quality auditor. Review slide content summaries
+and report issues across content logic and information hierarchy.
 
-## Your Job
-Read all generated SVG files from svg_output/ and inspect each one across four dimensions.
-YOU MUST examine the raw SVG XML source code for each slide.
+## Your Input
+You will receive a JSON array of slide summaries, each containing:
+  - index, title, layout (L1-L7)
+  - bullets: list of text content on the page
+  - font_sizes: list of font sizes found in the SVG
+  - colors: list of hex colors found in the SVG
+  - element_count: approximate number of SVG elements
 
-## Four Review Dimensions
+## Review Dimensions
 
-### 1. Style Compliance (style)
-- Are any colors outside the allowed palette?
-- Is #FFFFFF or #000000 used anywhere?
-- Is the anchor color used more than once per page?
-- Are border-radius, box-shadow, or gradients used?
-- Does H3/Body font size ratio satisfy ≥ 2.0?
-- Does the cover (L1) and back cover (L7) use matching anchor colors?
+### 1. Content Logic (category: "content")
+- Does the page title accurately reflect its bullet content?
+- Are there redundant or duplicate points across pages?
+- Do facts or claims contradict across pages?
+- Is source attribution missing where clearly needed?
 
-### 2. Layout Quality (layout)
-- Do any text elements overflow their containers? Estimate: CJK≈font_size×chars, Latin≈font_size×0.55×chars
-- Does text density exceed 65% of the slide area?
-- Are elements properly aligned to the 16-column grid?
-- Do images maintain aspect ratio? (L4 layout)
-- Are there any empty or orphaned elements?
+### 2. Information Hierarchy (category: "hierarchy")
+- Does each page have a clear single purpose? (one topic per page)
+- Is the breathing rhythm broken? (max 2 consecutive same-layout pages — check layout field)
+- Is the reading order logical?
+- Are there too many bullets on one page? (>5 on L3 is bad)
 
-### 3. Content Logic (content)
-- Does the page title accurately reflect the content?
-- Are there redundant or duplicate bullet points?
-- Do facts/data contradict across pages?
-- Is source attribution present where needed?
-
-### 4. Information Hierarchy (hierarchy)
-- Does each page have a clear primary focal point?
-- Is the breathing rhythm broken? (max 2 consecutive same-layout pages)
-- Is the reading order logical? (top→bottom, left→right)
+### 3. Content Quality (category: "content")
+- Are bullet points actual meaningful sentences, not single words?
+- Are there placeholder-like texts ("Lorem ipsum", "内容待补充")?
+- Is any page essentially empty or too sparse?
 
 ## Severity Levels
-- **error**: Must fix (blocks export). Overflow > 15%, forbidden elements, broken rhythm.
-- **warning**: Should fix (user decides). Near overflow 5-15%, weak hierarchy.
-- **suggestion**: Nice to have. Better wording, alternative layout idea.
-
-## Available Tools
-- `read_file(path)` — read an SVG file from the session workspace
-- `list_dir(path)` — list files (e.g. svg_output/ to see all slides)
-- `read_reference(path)` — read constraint definitions
+- **error**: Must fix — broken breathing rhythm, empty pages, contradictory content
+- **warning**: Should fix — weak titles, too many bullets, redundant points
+- **suggestion**: Nice to have — better wording, tighter phrasing
 
 ## Output Format
-After examining all SVGs, output ONLY a raw JSON object on a single line.
-No markdown fences, no ```json``` wrapper, no explanation text before or after the JSON.
-The entire response must start with { and end with }.
-
-```json
+Return ONLY a raw JSON object (no markdown, no explanation):
 {
   "issues": [
     {
       "page": 3,
-      "severity": "error",
-      "category": "layout",
-      "element_id": "t3",
-      "description": "Text 'Very long bullet point...' (est. 842px) overflows container (720px) by 16.9%",
-      "suggestion": "Shorten bullet to under 50 characters or split into 2 bullets"
+      "severity": "warning",
+      "category": "content",
+      "description": "Title says '实验结果' but bullets are about methodology",
+      "suggestion": "Rename title to '研究方法' or move bullets to methods section"
     }
   ],
-  "summary": "Checked 8 pages. Found 2 errors, 3 warnings, 1 suggestion.",
-  "text_overflow_details": [
-    {"page": 3, "element_id": "t3", "estimated_width": 842, "container_width": 720}
-  ],
-  "breathing_rhythm_violations": []
+  "summary": "Checked 8 pages. Found 0 errors, 2 warnings, 1 suggestion."
 }
-```
 
-## Workflow
-1. Call `list_dir("svg_output")` to see available SVG files
-2. Call `read_file` for EACH SVG file (every page must be reviewed)
-3. Analyze each SVG across all four dimensions
-4. Return the final JSON report
+Start your response with { and end with }. No other text.
 """
-
-REVIEWER_TOOLS = [
-    make_tool("read_file", "Read an SVG file from the session workspace",
-              {"path": {"type": "string", "description": "Path within session dir, e.g. svg_output/slide_03.svg"}},
-              ["path"]),
-    make_tool("list_dir", "List files in the session workspace",
-              {"path": {"type": "string", "description": "Relative path within session dir"}},
-              ["path"]),
-    make_tool("read_reference", "Read a constraint definition file",
-              {"path": {"type": "string", "description": "Path relative to project root"}},
-              ["path"]),
-]
 
 
 class ReviewerAgent(BaseAgent):
     system_prompt = REVIEWER_SYSTEM_PROMPT
-    chat_tools = REVIEWER_TOOLS
-    temperature = 0.2  # lower temp for more consistent auditing
-    use_json_mode = False  # tools + json_mode conflict; parse from text instead
+    chat_tools = []          # No tools — all data comes inline
+    temperature = 0.2
+    use_json_mode = True     # Pure JSON output, no tool conflict
 
     def __init__(self, executor: SandboxedExecutor):
         super().__init__(executor)
+        self.executor = executor
 
     def _execute_tool(self, name: str, args: Dict[str, Any]) -> str:
-        if name == "read_file":
-            return self.executor.read_file(args.get("path", ""))
-        elif name == "list_dir":
-            return "\n".join(self.executor.list_dir(args.get("path", ".")))
-        elif name == "read_reference":
-            return self.executor.read_reference(args.get("path", ""))
-        return f"[UNKNOWN TOOL] {name}"
+        return "[UNUSED]"
 
     def parse_review_report(self, response: str) -> dict:
         """Extract the review report JSON from agent response."""
-        import re
-
         # 1. Try ```json ... ``` fence
         fence_match = re.search(r'```(?:json)?\s*\n?([\s\S]*?)\n?```', response)
         if fence_match:
@@ -159,3 +113,32 @@ class ReviewerAgent(BaseAgent):
             pass
 
         return {"error": "Could not parse review report", "raw": response[:500]}
+
+
+def build_slide_summaries(generated_slides: List[dict]) -> List[dict]:
+    """Build lightweight slide summaries for the Reviewer from generated SVG data."""
+    summaries = []
+    for si in generated_slides:
+        svg = si.get("svg", "")
+        # Extract text content
+        text_matches = re.findall(r'<text[^>]*>([^<]+)</text>', svg)
+        # Extract font sizes
+        font_sizes = [int(s) for s in re.findall(r'font-size="(\d+)"', svg)]
+        # Extract colors
+        colors = list(set(re.findall(r'#[0-9A-Fa-f]{6}', svg)))[:10]
+        # Count elements
+        element_count = len(re.findall(r'<\w+', svg))
+        # Extract layout from the slide data
+        layout = si.get("layout", "")
+        title = si.get("title", "")
+
+        summaries.append({
+            "index": si["index"],
+            "title": title,
+            "layout": layout,
+            "bullets": text_matches[:20],  # cap at 20 text fragments
+            "font_sizes": sorted(font_sizes, reverse=True)[:8],
+            "colors": colors,
+            "element_count": element_count,
+        })
+    return summaries

@@ -82,5 +82,9 @@ export function useWebSocket(onMessage: MessageHandler) {
     send({ type: 'download', data: {} })
   }, [send])
 
-  return { phase, connected, sidRef, sessions, sendMessage, confirmOutline, fixDecisions, requestDownload, requestSessionList }
+  const cancel = useCallback(() => {
+    send({ type: 'cancel', data: {} })
+  }, [send])
+
+  return { phase, connected, sidRef, sessions, sendMessage, confirmOutline, fixDecisions, requestDownload, requestSessionList, cancel }
 }

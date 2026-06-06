@@ -86,7 +86,7 @@ export default function App() {
     }
   }, [toast, addStatus])
 
-  const { phase, connected, sessions, sendMessage, confirmOutline, fixDecisions, requestDownload } = useWebSocket(handleMessage)
+  const { phase, connected, sessions, sendMessage, confirmOutline, fixDecisions, requestDownload, cancel } = useWebSocket(handleMessage)
 
   const handleFiles = useCallback(async (files: FileList) => {
     const result: UploadedFile[] = []
@@ -168,7 +168,7 @@ export default function App() {
         onDismissError={(i) => setErrors(e => e.filter((_, j) => j !== i))}
       />
       <div id="preview-panel">
-        <PhaseIndicator phase={phase} slideCount={slides} slideTotal={outline?.pages.length || slideCount.current} />
+        <PhaseIndicator phase={phase} slideCount={slides} slideTotal={outline?.pages.length || slideCount.current} onCancel={cancel} />
         <SlideGrid
           outline={outline}
           slides={slides}

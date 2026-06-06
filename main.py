@@ -39,7 +39,7 @@ from sessions.manager import SessionManager
 from agents.base import SandboxedExecutor
 from agents.strategist import StrategistAgent
 from agents.generator import GeneratorAgent, extract_svg_from_response
-from agents.reviewer import ReviewerAgent
+from agents.reviewer import ReviewerAgent, build_slide_summaries
 from constraints.validator import ConstraintValidator
 from protocols.websocket import (
     MessageType, WSProtocol,
@@ -173,6 +173,10 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
 
             elif msg_type == MessageType.RESUME_SESSION:
                 await _handle_resume(ws, executor, session_id)
+
+            elif msg_type == MessageType.CANCEL:
+                session_mgr.cancel(session_id)
+                logger.info(f"Session {session_id} cancelled by user")
 
             else:
                 await ws.send_json({
@@ -396,7 +400,16 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
     FORBIDDEN_IN_SVG = ["<foreignObject", "<mask", "<style>", "<textPath", "@font-face",
                          "<animate", "<script", "<iframe", "rgba("]
 
+    session_mgr.reset_cancelled(session_id)
+
     for i, page in enumerate(pages):
+        if session_mgr.is_cancelled(session_id):
+            logger.info(f"Generation cancelled by user at slide {i+1}/{total}")
+            await ws.send_json(ErrorMessage(
+                data=ErrorPayload(message="已取消生成", phase="generating", recoverable=True)
+            ).model_dump())
+            session_mgr.update_phase(session_id, "idle")
+            return
         try:
             idx = page.get("index", i + 1)
             svg_content = ""
@@ -466,15 +479,17 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
     session_mgr.update_review(session_id, 1)
 
     reviewer = ReviewerAgent(executor)
+    summaries = build_slide_summaries(generated_slides)
     try:
         review_response = await asyncio.to_thread(
             reviewer.run,
-            "Review all SVG files in svg_output/ and produce a structured issue report."
+            f"Review these slide summaries and report content/hierarchy issues:\n\n"
+            f"{json.dumps(summaries, ensure_ascii=False, indent=2)}"
         )
         review_data = reviewer.parse_review_report(review_response)
     except Exception as e:
         logger.error(f"Reviewer error: {e}")
-        review_data = {"issues": [], "summary": f"Review failed: {e}"}
+        review_data = {"issues": [], "summary": f"Reviewer unavailable: {e}"}
 
     # Supplement with ConstraintValidator
     validator = ConstraintValidator(palette)

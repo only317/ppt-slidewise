@@ -357,6 +357,13 @@ body{
   border-radius:20px;
   transition:all .3s;
 }
+#btn-cancel{
+  font-size:11px;font-weight:500;padding:4px 10px;
+  border:1px solid var(--accent-err);border-radius:20px;
+  background:var(--bg-surface);color:var(--accent-err);
+  cursor:pointer;transition:all .15s;
+}
+#btn-cancel:hover{background:rgba(239,68,68,.08)}
 
 #preview-grid{
   flex:1;overflow-y:auto;

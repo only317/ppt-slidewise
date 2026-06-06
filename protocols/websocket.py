@@ -32,6 +32,7 @@ class MessageType(StrEnum):
     DOWNLOAD = "download"
     RESUME_SESSION = "resume_session"
     LIST_SESSIONS = "list_sessions"
+    CANCEL = "cancel"
 
 
 # ============================================================
