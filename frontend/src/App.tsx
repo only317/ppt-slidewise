@@ -189,7 +189,7 @@ export default function App() {
         }}
       />
       <DropZone active={dragging} onFiles={handleFiles} />
-      {toasts.map((msg, i) => <Toast key={i} message={msg} />}
+      {toasts.map((msg, i) => <Toast key={i} message={msg} />)}
       <div
         style={{ display: dragging ? 'block' : 'none', position: 'fixed', inset: 0, zIndex: 9999 }}
         onDragLeave={() => setDragging(false)}
