@@ -9,6 +9,8 @@ interface Props {
 
 export function Lightbox({ index, slides, slideKeys, onClose, onPrev, onNext }: Props) {
   if (index === null) return null
+  const svg = slides[index]
+  if (!svg) return null
 
   return (
     <div id="lightbox" className="active" onClick={onClose}>
@@ -19,7 +21,7 @@ export function Lightbox({ index, slides, slideKeys, onClose, onPrev, onNext }: 
       <div className="lb-nav prev" onClick={e => { e.stopPropagation(); onPrev() }}>&#x2190;</div>
       <div className="lb-nav next" onClick={e => { e.stopPropagation(); onNext() }}>&#x2192;</div>
       <div id="lightbox-content" onClick={e => e.stopPropagation()}
-        dangerouslySetInnerHTML={{ __html: slides[index] }} />
+        dangerouslySetInnerHTML={{ __html: svg }} />
       <div className="lb-counter">{index} / {slideKeys.length}</div>
     </div>
   )

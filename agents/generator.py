@@ -147,7 +147,8 @@ class GeneratorAgent(BaseAgent):
     system_prompt = GENERATOR_SYSTEM_PROMPT
     chat_tools = GENERATOR_TOOLS
     temperature = 0.3
-    use_json_mode = False  # Generator returns raw SVG, not JSON
+    use_json_mode = False
+    max_tool_rounds = 50  # Generator returns raw SVG, not JSON
 
     def __init__(self, executor: SandboxedExecutor):
         super().__init__(executor)

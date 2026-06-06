@@ -185,6 +185,7 @@ class StrategistAgent(BaseAgent):
     chat_tools = STRATEGIST_TOOLS
     temperature = 0.3
     use_json_mode = True
+    max_tool_rounds = 50
 
     def __init__(self, executor: SandboxedExecutor):
         super().__init__(executor)

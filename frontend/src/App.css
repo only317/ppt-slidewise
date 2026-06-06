@@ -429,6 +429,8 @@ body{
 }
 #lightbox.active{display:flex;animation:fadeIn .25s var(--ease-out)}
 #lightbox svg{max-width:85vw;max-height:80vh;border-radius:var(--radius-sm);box-shadow:var(--shadow-lg)}
+#lightbox-content{display:flex;align-items:center;justify-content:center;pointer-events:none}
+#lightbox-content svg{pointer-events:auto}
 .lb-header{position:absolute;top:24px;left:32px;right:32px;display:flex;justify-content:space-between;align-items:center}
 .lb-title{font-size:13px;font-weight:500;color:var(--text-muted)}
 .lb-close{
