@@ -1,111 +1,100 @@
 # SlideWise
 
-> Agent-driven PPT generation with Guizang Swiss International aesthetics.  
+> Agent-driven PPT generation with Guizang aesthetics. Chat with AI → get a truly editable `.pptx`.  
 > 计算机图形学 Project 3 — 生成式AI实践
 
-Type a topic or drop a PDF. SlideWise generates a professionally styled, truly editable `.pptx` deck — every text box and shape is a native PowerPoint object.
+Drop a PDF, paste a GitHub link, upload a ZIP, or just type a topic. SlideWise generates a professionally styled `.pptx` — every text box and shape is a native PowerPoint object.
 
 ## Quick Start
 
 ```bash
-# 1. Install Python dependencies
+# 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Configure your DeepSeek API key
+# 2. Configure API key
 cp .env.example .env
 # Edit .env → paste your DEEPSEEK_API_KEY
 
-# 3. Build the frontend
-cd frontend
-npm install
-npm run build
-cd ..
+# 3. Build frontend
+cd frontend && npm install && npm run build && cd ..
 
 # 4. Launch
 python main.py
 ```
 
-Open **http://localhost:8888** in your browser.
+Open **http://localhost:8888**.
 
-## What You Can Do
+## Features
 
-| Scenario | How |
-|----------|-----|
-| Group meeting | Drop a paper PDF → "组会用，靛蓝色" |
-| Course assignment | Type a topic → "水课随便搞一下" |
-| Study sharing | Paste an outline → "克莱因蓝，瑞士风格" |
+- **Chat-driven**: natural language interface — just describe what you want
+- **Multi-input**: topic text, PDF papers, Markdown outlines, GitHub repos, ZIP projects
+- **Dual-agent quality loop**: Generator → Reviewer → fix cycle
+- **SVG → DrawingML compiler**: editable `.pptx` output (not flat images)
+- **Session persistence**: refresh-safe, resume previous sessions
+- **Cancel generation**: stop mid-generation if you change your mind
 
-## Style System (8 Palettes)
+## Style System
 
-**Dark palettes** — dark background, light text:
+Copied from [Guizang PPT Skill](https://github.com/op7418/guizang-ppt-skill) by 歸藏.
 
-| Palette | Anchor | Best for |
-|---------|--------|----------|
-| 靛蓝 Indigo | `#4a90d9` | Tech, AI, group meetings |
-| 墨水 Ink | `#c9a96e` | General, formal |
-| 森林 Forest | `#7a9a6e` | Nature, interdisciplinary |
-| 沙丘 Dune | `#d4956a` | Creative, humanities |
+### Style A — 电子杂志 × 电子墨水
 
-**Light palettes** (Swiss B-style) — light background, dark text, single saturated accent:
+Hero pages (dark ink bg) alternate with content pages (warm paper bg) for magazine breathing rhythm.
 
-| Palette | Anchor | Best for |
-|---------|--------|----------|
-| 克莱因蓝 Klein Blue | `#002FA7` | Academic, clean |
-| 柠檬黄 Lemon | `#c8a200` | Youth, energetic |
-| 柠绿 Lime | `#7a9900` | Ecology, health |
-| 安全橙 Safety Orange | `#d45a2e` | News, sports |
+| Theme | Hero BG | Content BG | Anchor |
+|-------|---------|------------|--------|
+| 墨水经典 Ink | `#0a0a0b` | `#f1efea` | `#c9a96e` |
+| 靛蓝瓷 Indigo | `#0a1f3d` | `#f1f3f5` | `#4a90d9` |
+| 森林墨 Forest | `#1a2e1f` | `#f5f1e8` | `#7a9a6e` |
+| 牛皮纸 Kraft | `#2a1e13` | `#eedfc7` | `#b8753e` |
+| 沙丘 Dune | `#1f1a14` | `#f0e6d2` | `#d4956a` |
 
-## Project Structure
+### Style B — 瑞士国际主义
 
-```
-├── main.py               # FastAPI + WebSocket entry point
-├── agents/
-│   ├── base.py            # DeepSeek API client + tool-use loop
-│   ├── strategist.py      # Content analysis + outline planning
-│   ├── generator.py       # Per-slide SVG generation
-│   └── reviewer.py        # 4-dimension quality audit
-├── constraints/
-│   ├── guizang.py         # Palette, typography, layout definitions
-│   └── validator.py       # Programmatic constraint checker
-├── engine/
-│   ├── svg_to_pptx/       # SVG → DrawingML compiler (native shapes)
-│   ├── svg_finalize/      # SVG post-processing pipeline
-│   ├── source_to_md/      # PDF / DOCX / web → Markdown converters
-│   └── text_measurer.py   # Pixel-level text overflow detection
-├── protocols/
-│   └── websocket.py       # 15 typed WebSocket message types
-├── frontend/
-│   └── src/components/    # React SPA (12 components)
-└── templates/
-    ├── icons/             # 640 SVG icons
-    └── charts/            # 52 chart templates
-```
+Unified warm off-white background + single saturated accent. Grid-first, sharp corners, hairline rules.
 
-## Requirements
-
-- Python 3.10+
-- Node.js 18+ (frontend build only)
-- DeepSeek API key (set `DEEPSEEK_API_KEY` in `.env`)
+| Theme | BG | Text | Accent |
+|-------|-----|------|--------|
+| 克莱因蓝 IKB | `#fafaf8` | `#0a0a0a` | `#002FA7` |
+| 柠檬黄 Lemon | `#fafaf8` | `#0a0a0a` | `#FFD500` |
+| 柠绿 Lime | `#fafaf8` | `#0a0a0a` | `#C5E803` |
+| 安全橙 Safety Orange | `#fafaf8` | `#0a0a0a` | `#FF6B35` |
 
 ## Architecture
 
 ```
-User (browser chat + slide preview)
-  │ WebSocket
-  ▼
-Strategist Agent → outline
-  │
-Generator Agent → per-slide SVG (streamed)
-  │
-Reviewer Agent → issue report
-  │
-User decides → fix / ignore
-  │
-SVG → DrawingML compiler → .pptx download
+Browser (React SPA) ←WebSocket→ FastAPI Backend
+                                │
+                ┌───────────────┼───────────────┐
+                ▼               ▼               ▼
+          Strategist       Generator        Reviewer
+          (outline)        (per-page SVG)   (quality audit)
+                                │
+                                ▼
+                      SVG → DrawingML → .pptx
 ```
 
-Three DeepSeek V4 Flash agents with role separation via System Prompts. A programmatic `ConstraintValidator` supplements the Reviewer for deterministic checks (color, typography ratios, breathing rhythm).
+Three DeepSeek V4 Flash agents with role separation via System Prompts. Programmatic `ConstraintValidator` and PIL-based text measurement supplement the Reviewer.
+
+## Project Structure
+
+```
+├── main.py               # FastAPI + WebSocket server
+├── agents/               # 3 agents: strategist, generator, reviewer
+├── constraints/          # Guizang palettes + layout templates + validator
+├── engine/
+│   ├── svg_to_pptx/      # SVG → native PowerPoint DrawingML
+│   ├── svg_finalize/     # SVG post-processing
+│   ├── source_to_md/     # PDF / DOCX / web converters
+│   └── text_measurer.py  # PIL pixel-level overflow detection
+├── protocols/            # Typed WebSocket messages (Pydantic)
+├── frontend/             # React SPA (Vite + TypeScript)
+├── templates/            # 640 SVG icons + 52 chart templates
+└── sessions/             # Session state (auto-cleaned)
+```
 
 ## Credits
 
-Built on ideas from [PPT Master](https://github.com/hugohe3/ppt-master) (SVG→PPTX compilation) and [Guizang PPT Skill](https://github.com/op7418/guizang-ppt-skill) (Swiss International Style). Project 3 for CS Graphics Course, 2026 Spring.
+- PPT generation: [PPT Master](https://github.com/hugohe3/ppt-master)
+- Design system: [Guizang PPT Skill](https://github.com/op7418/guizang-ppt-skill)
+- LLM: DeepSeek V4 Flash

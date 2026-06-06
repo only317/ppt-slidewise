@@ -32,7 +32,9 @@
       "Bash(git commit *)",
       "Bash(python -c \"from sessions.manager import SessionManager; print\\([m for m in dir\\(SessionManager\\) if not m.startswith\\('_'\\)]\\)\")",
       "Bash(npx tsc *)",
-      "Bash(python -c \"import uvicorn; print\\(uvicorn.__version__\\)\")"
+      "Bash(python -c \"import uvicorn; print\\(uvicorn.__version__\\)\")",
+      "Bash(git remote *)",
+      "Bash(git push *)"
     ]
   }
 }
