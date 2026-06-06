@@ -92,11 +92,15 @@ L7 BACK COVER: Title at (100,280) 1080×100 centered, subtitle at (100,400), met
 
 ## COLOR PALETTE (from constraints/guizang.py)
 Read the file for exact HEX values. Never use #FFFFFF or #000000.
-Dark palettes use dark backgrounds (#0a...) with light text (#f1...).
-Swiss-light palettes use near-white backgrounds (#f5f4f0) with dark text (#1a1a1c).
-In Swiss-light mode, the anchor color is the ONLY saturated color on the page — use it
-sparingly for bullet markers, section numbers, and hero data. All other elements use
-text_primary or text_secondary.
+
+**Style A (暗底电子杂志)**: Dark background (#0a...) + light warm text (#f1...).
+  The anchor color is used for accents: bullet markers, section numbers, hero data.
+  Background fills the entire 1280×720 with palette.background.
+
+**Style B (白底瑞士国际主义)**: Light background (#fafaf8) + dark text (#1a1a1c).
+  The anchor color is the ONLY saturated color on the page — use it sparingly for
+  bullet markers, section numbers, hero data. All other elements use text_primary
+  or text_secondary. Background is palette.background (NOT white).
 
 ## TEXT CONTENT RULES
 - Every text element MUST contain real, meaningful content

@@ -305,8 +305,11 @@ body{
 .style-pop-family{margin-bottom:10px}
 .style-pop-family:last-child{margin-bottom:0}
 .style-pop-label{
-  font-size:10px;font-weight:600;color:var(--text-dim);
-  text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;display:block;
+  font-size:11px;font-weight:700;color:var(--text);
+  margin-bottom:2px;display:block;
+}
+.style-pop-desc{
+  font-size:10px;color:var(--text-dim);margin-bottom:8px;display:block;
 }
 .style-pop-chips{display:flex;gap:6px;flex-wrap:wrap}
 .style-pop-chip{
@@ -319,7 +322,8 @@ body{
 .style-pop-chip:hover{border-color:var(--anchor);background:var(--anchor-dim)}
 .style-pop-chip.active{border-color:var(--anchor);background:var(--anchor-dim);color:var(--anchor);font-weight:600}
 .spc-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
-.spc-name{font-size:12px}
+.spc-name{font-size:12px;font-weight:600}
+.spc-sub{font-size:10px;color:var(--text-dim)}
 #input-actions .btn-primary{margin-left:auto}
 
 /* Status messages */

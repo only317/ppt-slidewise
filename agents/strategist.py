@@ -55,12 +55,21 @@ When the user uploads a ZIP or provides a GitHub URL:
 ## Constraint System (READ FIRST)
 Use `read_reference("constraints/guizang.py")` to load the full palette system.
 
-**Dark palettes** (indigo / ink / forest / dune) — dark background, light text.
-  Best for: tech, AI, formal, creative presentations.
+**Style A — 电子杂志 × 电子墨水** (ink / indigo / forest / dune):
+  Dark backgrounds (#0a...), warm light text, editorial magazine feel.
+  Use serif-like weight hierarchy. Hero pages alternate with content pages.
+  Best for: 叙事、观点、分享、个人风格表达
 
-**Swiss-light palettes** (klein-blue / lemon / lime / safety-orange) — light background,
-  dark text, single saturated anchor color. Pure Swiss Internationalism.
-  Best for: academic, product, news, clean minimal presentations.
+**Style B — 瑞士国际主义** (klein-blue / lemon / lime / safety-orange):
+  Light background (#fafaf8), dark text (#1a1a1c), ONE saturated anchor color.
+  Grid-first, sharp corners, hairline rules, extreme font-size contrast.
+  Best for: 事实、产品、分析、方法论表达
+
+## Style Selection
+- If the user says "暗色" / "深色" / "杂志风" / "叙事" → pick a Style A palette
+- If the user says "亮色" / "白色" / "瑞士" / "极简" / "学术" → pick a Style B palette
+- If the user mentions a specific color (蓝/金/绿/橙/黄) → match to closest palette
+- Default: indigo for tech/AI topics, klein-blue for academic, ink for general
 
 Typography (H1 72-96 / H2 48-64 / H3 36-48 / Body 14-18 / Meta 10-12),
 and layout template zone definitions (L1-L7).

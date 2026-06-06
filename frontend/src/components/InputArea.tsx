@@ -2,21 +2,23 @@ import { useState, useRef, useEffect } from 'react'
 
 interface FileTag { name: string }
 
-interface StyleItem { id: string; name: string; hex: string; family: 'dark' | 'light' }
+interface StyleItem { id: string; name: string; hex: string; desc: string; family: 'A' | 'B' }
 
-const STYLES: { family: string; items: StyleItem[] }[] = [
-  { family: '深色系', items: [
-    { id: 'indigo', name: '靛蓝', hex: '#4a90d9', family: 'dark' },
-    { id: 'ink', name: '墨水', hex: '#c9a96e', family: 'dark' },
-    { id: 'forest', name: '森林', hex: '#7a9a6e', family: 'dark' },
-    { id: 'dune', name: '沙丘', hex: '#d4956a', family: 'dark' },
-  ]},
-  { family: '亮色系', items: [
-    { id: 'klein-blue', name: '克莱因蓝', hex: '#002FA7', family: 'light' },
-    { id: 'lemon', name: '柠檬黄', hex: '#c8a200', family: 'light' },
-    { id: 'lime', name: '柠绿', hex: '#7a9900', family: 'light' },
-    { id: 'safety-orange', name: '安全橙', hex: '#d45a2e', family: 'light' },
-  ]},
+const STYLES: { family: string; label: string; desc: string; items: StyleItem[] }[] = [
+  { family: 'A', label: '电子杂志 × 电子墨水', desc: '暗底、衬线标题、叙事节奏 —— 适合观点分享、个人表达',
+    items: [
+      { id: 'ink', name: '墨水', hex: '#c9a96e', desc: '深邃·权威·叙事', family: 'A' },
+      { id: 'indigo', name: '靛蓝瓷', hex: '#4a90d9', desc: '科技·AI·研究', family: 'A' },
+      { id: 'forest', name: '森林墨', hex: '#7a9a6e', desc: '自然·文化·跨学科', family: 'A' },
+      { id: 'dune', name: '沙丘', hex: '#d4956a', desc: '怀旧·人文·创意', family: 'A' },
+    ]},
+  { family: 'B', label: '瑞士国际主义', desc: '白底、单一锚点色、网格至上、极简直角 —— 适合产品分析、方法论',
+    items: [
+      { id: 'klein-blue', name: '克莱因蓝', hex: '#002FA7', desc: '学术·纯净·产品', family: 'B' },
+      { id: 'lemon', name: '柠檬黄', hex: '#FFD500', desc: '年轻·零售·Y2K', family: 'B' },
+      { id: 'lime', name: '柠绿', hex: '#C5E803', desc: '生态·健康·Z世代', family: 'B' },
+      { id: 'safety-orange', name: '安全橙', hex: '#FF6B35', desc: '新闻·运动·工业', family: 'B' },
+    ]},
 ]
 
 interface Props {
@@ -51,7 +53,8 @@ export function InputArea({ onSend, onFilesAdded, disabled, styleTag, onStyleTag
     setText('')
   }
 
-  const activeStyle = STYLES.flatMap(f => f.items).find(s => s.id === styleTag)
+  const allStyles = STYLES.flatMap(f => f.items)
+  const activeStyle = allStyles.find(s => s.id === styleTag)
 
   return (
     <div id="chat-input-area">
@@ -99,7 +102,8 @@ export function InputArea({ onSend, onFilesAdded, disabled, styleTag, onStyleTag
             <div className="style-popover">
               {STYLES.map(fam => (
                 <div key={fam.family} className="style-pop-family">
-                  <span className="style-pop-label">{fam.family}</span>
+                  <span className="style-pop-label">{fam.label}</span>
+                  <span className="style-pop-desc">{fam.desc}</span>
                   <div className="style-pop-chips">
                     {fam.items.map(s => (
                       <button key={s.id}
@@ -107,6 +111,7 @@ export function InputArea({ onSend, onFilesAdded, disabled, styleTag, onStyleTag
                         onClick={() => { onStyleTagChange(styleTag === s.id ? null : s.id); setShowStyles(false) }}>
                         <span className="spc-dot" style={{background:s.hex}} />
                         <span className="spc-name">{s.name}</span>
+                        <span className="spc-sub">{s.desc}</span>
                       </button>
                     ))}
                   </div>

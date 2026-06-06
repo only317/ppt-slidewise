@@ -1,40 +1,46 @@
 """
-Guizang Swiss International Style — Constraint Definitions.
+Guizang Style System — Two distinct style families.
 
-Four palettes, five typography levels, seven layout templates, and
-strict anti-decoration rules. All values are canonical; the Reviewer
-Agent and ConstraintValidator both reference this file.
+Style A: 电子杂志 × 电子墨水 (Editorial Magazine × E-Ink)
+  Dark backgrounds, warm text, serif titles, alternating hero/info rhythm.
+  Best for: narrative, opinion, sharing, personal expression.
+  Palettes: ink, indigo, forest, dune
+
+Style B: 瑞士国际主义 (Swiss Internationalism)
+  Light backgrounds, single saturated anchor color, 16-col grid,
+  sharp corners, hairline rules, extreme font-size contrast.
+  Best for: facts, products, analysis, methodology.
+  Palettes: klein-blue, lemon, lime, safety-orange
 """
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 # ============================================================
-# 1. PALETTES — 4 colour families
+# Palette
 # ============================================================
 
 @dataclass(frozen=True)
 class Palette:
     name: str
-    background: str      # slide background
-    text_primary: str     # body / headings
-    anchor: str           # single accent highlight per page
-    text_secondary: str   # muted text (meta, page numbers)
-    surface: str          # card / panel background
-    divider: str          # thin rules / separators
+    family: str           # "A" = dark magazine, "B" = light Swiss
+    description: str
+    background: str
+    text_primary: str
+    anchor: str
+    text_secondary: str
+    surface: str
+    divider: str
+
+# ============================================================
+# Style A — 电子杂志 × 电子墨水 (Dark, editorial, narrative)
+# ============================================================
 
 PALETTES: Dict[str, Palette] = {
-    "indigo": Palette(
-        name="靛蓝 Indigo",
-        background="#0a1f3d",
-        text_primary="#f1f3f5",
-        anchor="#4a90d9",
-        text_secondary="#7a8ba0",
-        surface="#0f2a4f",
-        divider="#1e3d66",
-    ),
     "ink": Palette(
         name="墨水 Ink",
+        family="A",
+        description="像 Monocle 杂志 — 深邃、权威、适合叙事与观点表达",
         background="#0a0a0b",
         text_primary="#f1efea",
         anchor="#c9a96e",
@@ -42,8 +48,21 @@ PALETTES: Dict[str, Palette] = {
         surface="#161614",
         divider="#2e2d29",
     ),
+    "indigo": Palette(
+        name="靛蓝瓷 Indigo",
+        family="A",
+        description="暗夜蓝底 — 科技感、适合 AI / 研究 / 正式汇报",
+        background="#0a1f3d",
+        text_primary="#f1f3f5",
+        anchor="#4a90d9",
+        text_secondary="#7a8ba0",
+        surface="#0f2a4f",
+        divider="#1e3d66",
+    ),
     "forest": Palette(
-        name="森林 Forest",
+        name="森林墨 Forest",
+        family="A",
+        description="墨绿色调 — 自然、文化、跨学科话题",
         background="#1a2e1f",
         text_primary="#f5f1e8",
         anchor="#7a9a6e",
@@ -53,6 +72,8 @@ PALETTES: Dict[str, Palette] = {
     ),
     "dune": Palette(
         name="沙丘 Dune",
+        family="A",
+        description="暖棕底色 — 怀旧、人文、创意表达",
         background="#1f1a14",
         text_primary="#f0e6d2",
         anchor="#d4956a",
@@ -62,59 +83,77 @@ PALETTES: Dict[str, Palette] = {
     ),
 }
 
-# Swiss-light palettes — Guizang B-style original: light bg + single saturated accent
+# ============================================================
+# Style B — 瑞士国际主义 (Light, Swiss, analytical)
+# ============================================================
+
 PALETTES.update({
     "klein-blue": Palette(
         name="克莱因蓝 Klein Blue",
-        background="#f5f4f0",
+        family="B",
+        description="国际克莱因蓝 IKB — 纯净、学术、产品分析",
+        background="#fafaf8",
         text_primary="#1a1a1c",
-        anchor="#002FA7",
+        anchor="#002FA7",       # Authentic International Klein Blue
         text_secondary="#6b6b6e",
-        surface="#ebeae6",
+        surface="#f0efec",
         divider="#d6d4cf",
     ),
     "lemon": Palette(
         name="柠檬黄 Lemon Yellow",
-        background="#f5f4f0",
+        family="B",
+        description="明亮柠檬黄 — 年轻、零售、Y2K 美学",
+        background="#fafaf8",
         text_primary="#1a1a1c",
-        anchor="#c8a200",
+        anchor="#FFD500",       # Original Guizang Lemon Yellow
         text_secondary="#6b6b6e",
-        surface="#ebeae6",
+        surface="#f0efec",
         divider="#d6d4cf",
     ),
     "lime": Palette(
         name="柠绿 Lime Green",
-        background="#f5f4f0",
+        family="B",
+        description="荧光柠绿 — 生态、健康、Z 世代",
+        background="#fafaf8",
         text_primary="#1a1a1c",
-        anchor="#7a9900",
+        anchor="#C5E803",       # Original Guizang Lime Green
         text_secondary="#6b6b6e",
-        surface="#ebeae6",
+        surface="#f0efec",
         divider="#d6d4cf",
     ),
     "safety-orange": Palette(
         name="安全橙 Safety Orange",
-        background="#f5f4f0",
+        family="B",
+        description="高饱和安全橙 — 新闻、运动、工业风",
+        background="#fafaf8",
         text_primary="#1a1a1c",
-        anchor="#d45a2e",
+        anchor="#FF6B35",       # Original Guizang Safety Orange
         text_secondary="#6b6b6e",
-        surface="#ebeae6",
+        surface="#f0efec",
         divider="#d6d4cf",
     ),
 })
 
-# Hard rules (validated by Reviewer + ConstraintValidator)
+# Style family helpers
+def get_palette_ids_by_family(family: str) -> List[str]:
+    return [k for k, v in PALETTES.items() if v.family == family]
+
+STYLE_A_IDS = get_palette_ids_by_family("A")
+STYLE_B_IDS = get_palette_ids_by_family("B")
+
+# Hard rules
 FORBIDDEN_COLORS = {"#FFFFFF", "#ffffff", "#000000", "#000000"}
 MAX_ANCHOR_ELEMENTS_PER_PAGE = 1
 
 # ============================================================
-# 2. TYPOGRAPHY — 5-level hierarchy
+# Typography — 5-level hierarchy
 # ============================================================
 
 @dataclass(frozen=True)
 class TypographyLevel:
     name: str
-    size_range: Tuple[int, int]   # (min_px, max_px)
-    weight: str                   # CSS font-weight
+    size_range: Tuple[int, int]
+    weight: str
     usage: str
 
 TYPOGRAPHY: Dict[str, TypographyLevel] = {
@@ -125,33 +164,23 @@ TYPOGRAPHY: Dict[str, TypographyLevel] = {
     "Meta": TypographyLevel("Meta",        (10, 12),  "500", "Page numbers, citations"),
 }
 
-# The Iron Law: H1_min / Body_max >= 8:1
-TYPOGRAPHY_IRON_RATIO = 8.0  # H1.min(72) / Body.max(18) = 4? No -> must use relaxed body
-
-# Relaxed body for 8:1 enforcement: H1 72 / Body 9 → but minimum readable is 14px.
-# So we allow 72/18 = 4:1 with a WARNING rather than error when < 8:1.
-# Reviewer checks: H1/H3 >= 1.5, H3/Body >= 2.0 (enforceable).
+# Style B enforces ≥8:1 H1:Body; Style A is more relaxed
 TYPOGRAPHY_RATIO_CHECKS = {
-    ("H1", "H3"): 1.5,   # H1 must be >= 1.5× H3
-    ("H3", "Body"): 2.0,  # H3 must be >= 2.0× Body
+    ("H1", "H3"): 1.5,
+    ("H3", "Body"): 2.0,
 }
 
-# Forbidden: pure black, pure white text
 FORBIDDEN_TEXT_COLORS = FORBIDDEN_COLORS
 
 # ============================================================
-# 3. LAYOUT TEMPLATES — 7 predefined zone skeletons
+# Layout Templates — 7 predefined zone skeletons
 # ============================================================
 
 @dataclass
 class LayoutZone:
-    """A rectangular zone within a layout template."""
-    x: int
-    y: int
-    w: int
-    h: int
-    semantic: str        # "title" | "body" | "meta" | "image" | "decoration"
-    align: str = "left"  # "left" | "center" | "right"
+    x: int; y: int; w: int; h: int
+    semantic: str
+    align: str = "left"
     optional: bool = False
 
 @dataclass
@@ -246,14 +275,13 @@ LAYOUTS: Dict[str, LayoutTemplate] = {
 }
 
 # ============================================================
-# 4. GRID & ANTI-DECORATION RULES
+# Grid & Anti-Decoration
 # ============================================================
 
 GRID_COLUMNS = 16
-GRID_GAP = 16            # px between columns
-GRID_COL_WIDTH = 62      # px per column (16*62 + 15*16 = 992+240 → close to 1280)
+GRID_GAP = 16
+GRID_COL_WIDTH = 62
 
-# Forbidden visual treatments (Swiss Internationalism)
 FORBIDDEN_CSS = {
     "border-radius": "No rounded corners — only 90° angles",
     "box-shadow": "No drop shadows — flat design only",
@@ -261,8 +289,5 @@ FORBIDDEN_CSS = {
     "radial-gradient": "No gradients — solid colors only",
 }
 
-# Breathing rhythm: max 2 consecutive pages with same layout
 BREATHING_RHYTHM_MAX_CONSECUTIVE = 2
-
-# Text density threshold (text area / slide area)
-MAX_TEXT_DENSITY = 0.65  # 65% — Reviewer flags as error above this
+MAX_TEXT_DENSITY = 0.65
