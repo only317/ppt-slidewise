@@ -1,24 +1,32 @@
 import { useState, useRef, useEffect } from 'react'
-import type { PipelinePhase, OutlineData, ReviewReportData, DoneData, SessionSummary } from '../types/messages'
+import type { OutlineData, ReviewReportData, DoneData, SessionSummary } from '../types/messages'
 import { ChatMessage } from './ChatMessage'
 import { DesignPreview } from './DesignPreview'
 import { OutlineEditor } from './OutlineEditor'
 import { ReviewReport } from './ReviewReport'
 import { InputArea } from './InputArea'
 
+// ---- Chat history types ----
+export type ChatEntry =
+  | { role: 'user'; text: string }
+  | { role: 'assistant'; type: 'welcome' }
+  | { role: 'assistant'; type: 'outline'; data: OutlineData }
+  | { role: 'assistant'; type: 'review'; data: ReviewReportData }
+  | { role: 'assistant'; type: 'done'; data: DoneData }
+  | { role: 'system'; type: 'status'; text: string }
+  | { role: 'system'; type: 'error'; text: string }
+
 interface FileTag { name: string }
 
 interface Props {
-  phase: PipelinePhase
-  connected: boolean
+  chatHistory: ChatEntry[]
   sessions: SessionSummary[]
   outline: OutlineData | null
   review: ReviewReportData | null
   done: DoneData | null
-  errors: string[]
-  statusMessages: string[]
   styleTag: string | null
   fileTags: FileTag[]
+  phase: string
   onStyleTagChange: (id: string | null) => void
   onRemoveFile: (i: number) => void
   onSend: (text: string) => void
@@ -26,125 +34,155 @@ interface Props {
   onConfirmOutline: (approved: boolean) => void
   onFix: (pages: number[], ignore: number[], feedback?: string) => void
   onSkipReview: () => void
-  onDismissError: (index: number) => void
-}
-
-const PHASE_CN: Record<string, string> = {
-  idle: '空闲', planning: '规划中', generating: '生成中', reviewing: '审查中', done: '已完成',
-}
-
-const PHASE_LABELS: Record<string, string> = {
-  planning: '正在分析内容，规划大纲…',
-  generating: '正在生成幻灯片…',
-  reviewing: '正在审查设计质量…',
 }
 
 export function ChatPanel({
-  phase, connected, sessions, outline, review, done, errors, statusMessages,
-  styleTag, fileTags, onStyleTagChange, onRemoveFile,
-  onSend, onFilesAdded, onConfirmOutline, onFix, onSkipReview, onDismissError,
+  chatHistory, sessions, outline, review, done,
+  styleTag, fileTags, phase,
+  onStyleTagChange, onRemoveFile, onSend, onFilesAdded,
+  onConfirmOutline, onFix, onSkipReview,
 }: Props) {
-  const showWelcome = phase === 'idle' && !outline
-  const [showSessions, setShowSessions] = useState(false)
-  const popRef = useRef<HTMLDivElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (popRef.current && !popRef.current.contains(e.target as Node)) setShowSessions(false)
-    }
-    if (showSessions) document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showSessions])
-
-  const currentId = new URLSearchParams(window.location.search).get('session') || 'new'
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatHistory.length])
 
   return (
     <div id="chat-panel">
-      <div id="chat-header">
-        <span className="logo">SlideWise</span>
-        <span className="accent-line" />
-        <div className="header-actions">
-          <button className="btn-new-chat" title="新建对话"
-            onClick={() => { window.location.href = '/?session=new' }}>
-            + 新建
-          </button>
-          <div className="session-picker-wrap" ref={popRef}>
-            <button className="btn-sessions" title="历史记录"
-              onClick={() => setShowSessions(!showSessions)} disabled={sessions.length === 0}>
-              &#9776;
-            </button>
-            {showSessions && sessions.length > 0 && (
-              <div className="session-popover">
-                <div className="session-pop-title">历史会话</div>
-                {sessions.map(s => (
-                  <div key={s.session_id}
-                    className={`session-item${s.session_id === currentId ? ' active' : ''}`}
-                    onClick={() => { window.location.href = `/?session=${s.session_id}` }}>
-                    <span className="si-phase">{PHASE_CN[s.phase] || s.phase}</span>
-                    <span className="si-info">
-                      {s.slides_generated}/{s.slides_total} 页
-                      {s.created_at && <span className="si-time">{new Date(s.created_at).toLocaleString('zh-CN')}</span>}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <span className="status">
-            {connected
-              ? <><span className="indicator" /> 就绪</>
-              : <span style={{color:'var(--accent-err)'}}>断开</span>
-            }
-          </span>
+      <ChatHeader sessions={sessions} />
+      <ChatBody chatHistory={chatHistory} outline={outline} review={review} done={done}
+        onConfirmOutline={onConfirmOutline} onFix={onFix} onSkipReview={onSkipReview} />
+      <ChatFooter styleTag={styleTag} fileTags={fileTags} phase={phase}
+        onStyleTagChange={onStyleTagChange} onRemoveFile={onRemoveFile}
+        onSend={onSend} onFilesAdded={onFilesAdded} />
+      <div ref={bottomRef} />
+    </div>
+  )
+}
+
+// ---- Sub-components ----
+
+function ChatHeader({ sessions }: { sessions: SessionSummary[] }) {
+  const [showSessions, setShowSessions] = useState(false)
+  const popRef = useRef<HTMLDivElement>(null)
+  const currentId = new URLSearchParams(window.location.search).get('session') || 'new'
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) setShowSessions(false)
+    }
+    if (showSessions) document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [showSessions])
+
+  return (
+    <div id="chat-header">
+      <span className="logo">SlideWise</span>
+      <div className="header-actions">
+        <button className="btn-new-chat"
+          onClick={() => { window.location.href = '/?session=new' }}>+ 新建</button>
+        <div className="session-picker-wrap" ref={popRef}>
+          <button className="btn-sessions"
+            onClick={() => setShowSessions(!showSessions)} disabled={sessions.length === 0}>&#9776;</button>
+          {showSessions && sessions.length > 0 && (
+            <div className="session-popover">
+              <div className="session-pop-title">历史会话</div>
+              {sessions.map(s => (
+                <div key={s.session_id}
+                  className={`session-item${s.session_id === currentId ? ' active' : ''}`}
+                  onClick={() => { window.location.href = `/?session=${s.session_id}` }}>
+                  <span className="si-phase">{PHASE_CN[s.phase]}</span>
+                  <span className="si-info">
+                    {s.slides_generated}/{s.slides_total} 页
+                    {s.created_at && <span className="si-time">{new Date(s.created_at).toLocaleString('zh-CN')}</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-
-      <div id="chat-messages">
-        {showWelcome && (
-          <ChatMessage role="system">
-            欢迎使用 SlideWise —— 输入 PPT 主题，或拖入 PDF / ZIP 文件，即可自动生成可编辑的演示文稿。
-            <br /><span style={{fontSize:11,color:'var(--text-dim)'}}>
-              支持：PDF论文 · Markdown大纲 · GitHub链接 · ZIP项目 · 纯文本主题
-            </span>
-          </ChatMessage>
-        )}
-
-        {outline && <DesignPreview outline={outline} />}
-        {outline && <OutlineEditor outline={outline} onConfirm={onConfirmOutline} />}
-        {review && <ReviewReport report={review} onFix={onFix} onSkip={onSkipReview} />}
-        {done && <DoneCard done={done} />}
-
-        {statusMessages.map((msg, i) => (
-          <ChatMessage key={`status-${i}`} role="system">
-            <span className="status-msg">{msg}</span>
-          </ChatMessage>
-        ))}
-
-        {phase !== 'idle' && !done && !statusMessages.length && (
-          <ChatMessage role="system">
-            <span className="status-msg pulse">{PHASE_LABELS[phase] || '处理中…'}</span>
-          </ChatMessage>
-        )}
-
-        {errors.map((err, i) => (
-          <ChatMessage key={i} role="system">
-            <span style={{color:'var(--accent-err)'}}>错误：{err}</span>
-            <button className="btn btn-ghost" style={{marginLeft:8,fontSize:10,padding:'2px 8px'}}
-              onClick={() => onDismissError(i)}>忽略</button>
-          </ChatMessage>
-        ))}
-      </div>
-
-      <InputArea
-        onSend={onSend}
-        onFilesAdded={onFilesAdded}
-        disabled={phase === 'generating' || phase === 'reviewing'}
-        styleTag={styleTag}
-        onStyleTagChange={onStyleTagChange}
-        fileTags={fileTags}
-        onRemoveFile={onRemoveFile}
-      />
     </div>
+  )
+}
+
+const PHASE_CN: Record<string, string> = { idle:'空闲', planning:'规划', generating:'生成', reviewing:'审查', done:'完成' }
+
+function ChatBody({ chatHistory, outline, review, done, onConfirmOutline, onFix, onSkipReview }: {
+  chatHistory: ChatEntry[]
+  outline: OutlineData | null
+  review: ReviewReportData | null
+  done: DoneData | null
+  onConfirmOutline: (approved: boolean) => void
+  onFix: (pages: number[], ignore: number[], feedback?: string) => void
+  onSkipReview: () => void
+}) {
+  return (
+    <div id="chat-messages">
+      {chatHistory.map((entry, i) => {
+        if (entry.role === 'user') {
+          return <ChatMessage key={i} role="user">{entry.text}</ChatMessage>
+        }
+        if (entry.role === 'assistant') {
+          if (entry.type === 'welcome') {
+            return <ChatMessage key={i} role="assistant">
+              <p>欢迎使用 SlideWise —— 输入 PPT 主题、上传 PDF / ZIP、或粘贴 GitHub 链接。</p>
+            </ChatMessage>
+          }
+          if (entry.type === 'outline') {
+            return <ChatMessage key={i} role="assistant">
+              <DesignPreview outline={entry.data} />
+              {outline && <OutlineEditor outline={outline} onConfirm={onConfirmOutline} />}
+            </ChatMessage>
+          }
+          if (entry.type === 'review') {
+            return <ChatMessage key={i} role="assistant">
+              <ReviewReport report={entry.data} onFix={onFix} onSkip={onSkipReview} />
+            </ChatMessage>
+          }
+          if (entry.type === 'done') {
+            return <ChatMessage key={i} role="assistant">
+              <DoneCard done={entry.data} />
+            </ChatMessage>
+          }
+        }
+        if (entry.role === 'system') {
+          if (entry.type === 'status') {
+            return <ChatMessage key={i} role="system">{entry.text}</ChatMessage>
+          }
+          if (entry.type === 'error') {
+            return <ChatMessage key={i} role="system">
+              <span style={{color:'var(--accent-err)'}}>{entry.text}</span>
+            </ChatMessage>
+          }
+        }
+        return null
+      })}
+    </div>
+  )
+}
+
+function ChatFooter({ styleTag, fileTags, phase, onStyleTagChange, onRemoveFile, onSend, onFilesAdded }: {
+  styleTag: string | null
+  fileTags: FileTag[]
+  phase: string
+  onStyleTagChange: (id: string | null) => void
+  onRemoveFile: (i: number) => void
+  onSend: (text: string) => void
+  onFilesAdded: (files: FileList) => void
+}) {
+  const busy = phase === 'generating' || phase === 'reviewing'
+  return (
+    <InputArea
+      onSend={onSend}
+      onFilesAdded={onFilesAdded}
+      disabled={busy}
+      styleTag={styleTag}
+      onStyleTagChange={onStyleTagChange}
+      fileTags={fileTags}
+      onRemoveFile={onRemoveFile}
+    />
   )
 }
 
@@ -154,7 +192,7 @@ function DoneCard({ done }: { done: DoneData }) {
       <div className="oc-header">导出完成</div>
       <p style={{fontSize:12,color:'var(--text-muted)',marginBottom:12}}>{done.filename}</p>
       <a href={done.download_url} className="btn-download" download>下载 .pptx</a>
-      <div className="gen-by">由 SlideWise 生成 · 所有元素均为原生 PowerPoint 形状，可直接编辑</div>
+      <div className="gen-by">所有元素均为原生 PowerPoint 形状，可直接编辑</div>
     </div>
   )
 }
