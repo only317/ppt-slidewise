@@ -581,6 +581,15 @@ async def handle_fix_decisions(ws: WebSocket, raw: dict, executor: SandboxedExec
     session_mgr.update_phase(session_id, "generating")
     session_mgr.update_review(session_id, current_round)
 
+    # Load outline for correct layout + title info per page
+    try:
+        outline_data = json.loads(executor.read_file("outline_confirmed.json"))
+    except Exception:
+        outline_data = {"pages": [], "meta": {}}
+    pages_lookup = {p.get("index"): p for p in outline_data.get("pages", [])}
+    meta = outline_data.get("meta") or {}
+    palette = meta.get("palette", "indigo") if isinstance(meta, dict) else "indigo"
+
     # Build per-page review context
     issues_by_page: dict = {}
     for iss in review_data.get("issues", []):
@@ -609,6 +618,7 @@ async def handle_fix_decisions(ws: WebSocket, raw: dict, executor: SandboxedExec
         pass
 
     for pg in fix_pages:
+        page_info = pages_lookup.get(pg, {"title": f"Slide {pg}", "layout": "L3", "bullets": []})
         page_feedback = "\n".join(
             f"[{iss.get('severity')}] {iss.get('category')}: {iss.get('description')}\n"
             f"  Suggested fix: {iss.get('suggestion', 'N/A')}"
@@ -621,9 +631,10 @@ async def handle_fix_decisions(ws: WebSocket, raw: dict, executor: SandboxedExec
             user_prompt = gen_agent.build_prompt(
                 mode="fix_specific_pages",
                 design_spec=design_spec,
-                page_outline={"index": pg, "title": f"Fixed slide {pg}", "layout": "L3"},
+                page_outline=page_info,
                 previous_slides=previous_slides[-3:],
                 review_feedback=page_feedback,
+                palette=palette,
             )
             svg_response = await asyncio.to_thread(gen_agent.run, user_prompt)
             svg_content = _extract_svg(svg_response)
