@@ -188,6 +188,75 @@ class SandboxedExecutor:
             return f"No icons matching '{keyword}'"
         return "\n".join(matches[:20])
 
+    def clone_repo(self, url: str) -> str:
+        """Clone a GitHub repository into sources/repo/."""
+        import re
+        target = self._safe_path("sources/repo")
+        if target.exists():
+            shutil.rmtree(target)
+        target.mkdir(parents=True, exist_ok=True)
+
+        if not re.match(r'^https?://(github\.com|gitlab\.com)/', url):
+            return f"[ERROR] Only GitHub/GitLab HTTPS URLs are supported: {url}"
+
+        try:
+            result = subprocess.run(
+                ["git", "clone", "--depth", "1", url, str(target)],
+                capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=120,
+            )
+            if result.returncode != 0:
+                return f"[ERROR] Clone failed: {result.stderr[:500]}"
+            # Build file tree
+            tree = _build_file_tree(target)
+            return f"Cloned successfully.\n\nFile tree:\n{tree}"
+        except subprocess.TimeoutExpired:
+            return "[ERROR] Clone timed out (120s)"
+        except FileNotFoundError:
+            return "[ERROR] git not found — install git or use ZIP upload instead"
+
+    def extract_zip(self, zip_path: str) -> str:
+        """Extract an uploaded ZIP file into sources/repo/."""
+        import zipfile
+        src = self._safe_path(zip_path, must_exist=True)
+        target = self._safe_path("sources/repo")
+        if target.exists():
+            shutil.rmtree(target)
+        target.mkdir(parents=True, exist_ok=True)
+
+        try:
+            with zipfile.ZipFile(src, 'r') as zf:
+                zf.extractall(target)
+            tree = _build_file_tree(target)
+            return f"Extracted {len([f for f in target.rglob('*') if f.is_file()])} files.\n\nFile tree:\n{tree}"
+        except zipfile.BadZipFile:
+            return f"[ERROR] Invalid ZIP file: {zip_path}"
+
+
+def _build_file_tree(root: Path, max_depth: int = 3, max_files: int = 200) -> str:
+    """Build a human-readable file tree, skipping noise directories."""
+    SKIP = {'.git', 'node_modules', '__pycache__', '.venv', 'venv', '.idea',
+            '.vscode', 'dist', 'build', '.next', '.cache', 'egg-info'}
+    lines = []
+    count = 0
+    for path in sorted(root.rglob('*')):
+        if count >= max_files:
+            lines.append("... (truncated)")
+            break
+        rel = path.relative_to(root)
+        depth = len(rel.parts)
+        if depth > max_depth:
+            continue
+        if any(p in SKIP for p in rel.parts):
+            continue
+        prefix = "  " * (depth - 1) + ("├─ " if depth > 1 else "")
+        if path.is_dir():
+            lines.append(f"{prefix}{rel.parts[-1]}/")
+        else:
+            lines.append(f"{prefix}{rel.parts[-1]}")
+            count += 1
+    return "\n".join(lines)
+
 
 # ---------------------------------------------------------------------------
 # Base Agent

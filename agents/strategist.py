@@ -35,6 +35,22 @@ natively-editable PowerPoint presentation. You determine:
 - `read_file(path)` — read a file from the session workspace
 - `list_dir(path)` — list files in the session workspace
 - `write_file(path, content)` — write design_spec.md or other files
+- `clone_repo(url)` — clone a GitHub/GitLab repository
+- `extract_zip(path)` — extract an uploaded ZIP file
+
+## Code Repository Analysis
+When the user uploads a ZIP or provides a GitHub URL:
+1. Clone/extract the project into sources/repo/
+2. Call `list_dir("sources/repo")` to see the file tree
+3. Call `read_file("sources/repo/README.md")` — the README is your PRIMARY guide
+4. From the README, identify: project purpose, key modules, entry points, dependencies
+5. Read the key files mentioned in the README (up to ~15 files)
+6. Generate a PPT that covers:
+   - Cover: project name + one-liner
+   - Overview: tech stack, dependencies, file stats
+   - Architecture: directory tree + module responsibilities
+   - Key modules: 1 slide per major module (what it does, key APIs/classes)
+   - Setup & run: install + run instructions from README
 
 ## Constraint System (READ FIRST)
 Use `read_reference("constraints/guizang.py")` to load the full palette system.
@@ -134,6 +150,12 @@ STRATEGIST_TOOLS = [
               {"path": {"type": "string", "description": "Relative path within the session directory"},
                "content": {"type": "string", "description": "File content"}},
               ["path", "content"]),
+    make_tool("clone_repo", "Clone a GitHub/GitLab repository",
+              {"url": {"type": "string", "description": "HTTPS URL of the repo"}},
+              ["url"]),
+    make_tool("extract_zip", "Extract an uploaded ZIP file",
+              {"zip_path": {"type": "string", "description": "Path to ZIP in session workspace"}},
+              ["zip_path"]),
 ]
 
 
@@ -161,6 +183,10 @@ class StrategistAgent(BaseAgent):
             return self.executor.write_file(
                 args.get("path", ""), args.get("content", "")
             )
+        elif name == "clone_repo":
+            return self.executor.clone_repo(args.get("url", ""))
+        elif name == "extract_zip":
+            return self.executor.extract_zip(args.get("zip_path", ""))
         return f"[UNKNOWN TOOL] {name}"
 
     def parse_outline(self, response: str) -> dict:

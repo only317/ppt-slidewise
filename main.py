@@ -264,13 +264,28 @@ async def handle_user_message(ws: WebSocket, raw: dict, executor: SandboxedExecu
 
     session_mgr.update_phase(session_id, "planning")
 
+    # Detect GitHub URL in user text → clone before running Strategist
+    github_url = _detect_github_url(text)
+    if github_url:
+        try:
+            clone_result = await asyncio.to_thread(executor.clone_repo, github_url)
+            logger.info(f"Repo cloned: {clone_result[:200]}")
+        except Exception as e:
+            logger.warning(f"Clone failed ({github_url}): {e}")
+
     # Run Strategist Agent
+    repo_hint = ""
+    if github_url:
+        repo_hint = f"\nA GitHub repository has been cloned to sources/repo/ — analyze it thoroughly."
+    if (executor._safe_path("sources/repo") / "README.md").exists():
+        repo_hint += "\nA code repository is available at sources/repo/ — read its README and key files."
+
     agent = StrategistAgent(executor)
     try:
         response = await asyncio.to_thread(
             agent.run,
             f"Analyze the source documents and create a design_spec.md + Outline JSON.\n\n"
-            f"User request: {text}",
+            f"User request: {text}{repo_hint}",
         )
     except Exception as e:
         logger.error(f"Strategist error: {e}")
@@ -710,12 +725,12 @@ async def _do_export(ws: WebSocket, executor: SandboxedExecutor, session_id: str
 # ---------------------------------------------------------------------------
 
 async def _convert_sources(executor: SandboxedExecutor):
-    """Convert uploaded PDF/DOCX files to Markdown."""
+    """Convert uploaded PDF/DOCX/ZIP files. ZIP files are extracted into sources/repo/."""
     sources_dir = executor._safe_path("sources")
     for f in sources_dir.iterdir():
         if f.suffix.lower() == ".pdf":
             try:
-                output = await asyncio.to_thread(
+                await asyncio.to_thread(
                     executor.run_script, "pdf_to_md.py", [f"sources/{f.name}"]
                 )
                 logger.info(f"PDF converted: {f.name}")
@@ -723,12 +738,25 @@ async def _convert_sources(executor: SandboxedExecutor):
                 logger.warning(f"PDF conversion failed ({f.name}): {e}")
         elif f.suffix.lower() in (".docx", ".doc"):
             try:
-                output = await asyncio.to_thread(
+                await asyncio.to_thread(
                     executor.run_script, "doc_to_md.py", [f"sources/{f.name}"]
                 )
                 logger.info(f"DOCX converted: {f.name}")
             except Exception as e:
                 logger.warning(f"DOCX conversion failed ({f.name}): {e}")
+        elif f.suffix.lower() == ".zip":
+            try:
+                result = await asyncio.to_thread(executor.extract_zip, f"sources/{f.name}")
+                logger.info(f"ZIP extracted: {f.name}\n{result[:200]}")
+            except Exception as e:
+                logger.warning(f"ZIP extraction failed ({f.name}): {e}")
+
+
+def _detect_github_url(text: str) -> str | None:
+    """Detect a GitHub/GitLab URL in user text."""
+    import re
+    m = re.search(r'(https?://(?:github\.com|gitlab\.com)/[\w.-]+/[\w.-]+)', text)
+    return m.group(1) if m else None
 
 
 def _extract_svg(response: str) -> str:

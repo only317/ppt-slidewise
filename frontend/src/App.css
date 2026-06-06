@@ -220,6 +220,20 @@ body{
 
 /* Input */
 #chat-input-area{padding:14px 24px 18px;border-top:1px solid var(--border);background:var(--bg-panel)}
+#input-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.input-tag{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:3px 10px;border-radius:20px;
+  font-size:12px;font-weight:500;white-space:nowrap;
+}
+.style-tag{background:var(--anchor-dim);color:var(--anchor)}
+.file-tag{background:var(--bg-hover);color:var(--text)}
+.tag-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.tag-x{
+  background:none;border:none;cursor:pointer;color:inherit;
+  font-size:16px;line-height:1;padding:0 2px;opacity:.5;
+}
+.tag-x:hover{opacity:1}
 #chat-input{
   width:100%;min-height:58px;
   background:var(--bg-surface);
@@ -233,13 +247,51 @@ body{
 #chat-input::placeholder{color:var(--text-dim);font-family:var(--font)}
 #chat-input:focus{outline:none;border-color:var(--anchor);box-shadow:0 0 0 3px rgba(74,108,247,.1)}
 #chat-input:disabled{opacity:.5}
-#input-actions{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+#input-actions{display:flex;align-items:center;gap:10px;margin-top:10px}
 #file-upload-label{
   cursor:pointer;color:var(--text-muted);font-size:13px;
   transition:color .15s;display:flex;align-items:center;gap:5px;
 }
 #file-upload-label:hover{color:var(--anchor)}
 #file-upload-label .icon{font-size:15px}
+.btn-action{
+  cursor:pointer;color:var(--text-muted);font-size:13px;
+  transition:color .15s;display:flex;align-items:center;gap:5px;
+  background:none;border:none;padding:0;
+}
+.btn-action:hover{color:var(--anchor)}
+.btn-action:disabled{opacity:.4;cursor:default}
+.style-picker-wrap{position:relative}
+.style-popover{
+  position:absolute;bottom:100%;left:0;margin-bottom:8px;
+  background:var(--bg-surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:14px 16px;
+  box-shadow:var(--shadow-lg);z-index:100;min-width:280px;
+}
+.style-pop-family{margin-bottom:10px}
+.style-pop-family:last-child{margin-bottom:0}
+.style-pop-label{
+  font-size:10px;font-weight:600;color:var(--text-dim);
+  text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;display:block;
+}
+.style-pop-chips{display:flex;gap:6px;flex-wrap:wrap}
+.style-pop-chip{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 10px;border:1px solid var(--border);
+  border-radius:20px;background:var(--bg-deep);
+  cursor:pointer;font-size:12px;transition:all .15s var(--ease-out);
+  color:var(--text);
+}
+.style-pop-chip:hover{border-color:var(--anchor);background:var(--anchor-dim)}
+.style-pop-chip.active{border-color:var(--anchor);background:var(--anchor-dim);color:var(--anchor);font-weight:600}
+.spc-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+.spc-name{font-size:12px}
+#input-actions .btn-primary{margin-left:auto}
+
+/* Status messages */
+.status-msg{font-size:12px;color:var(--text-dim);font-style:italic}
+.status-msg.pulse{animation:status-pulse 1.5s var(--ease-out) infinite}
+@keyframes status-pulse{0%,100%{opacity:.4}50%{opacity:1}}
 
 /* ============================================================
    Preview Panel

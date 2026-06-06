@@ -27,7 +27,8 @@
       "Bash(rmdir docs *)",
       "Bash(ls /tmp/PPT-creator/)",
       "Read(//tmp/**)",
-      "Bash(xargs wc -l)"
+      "Bash(xargs wc -l)",
+      "Bash(git rm *)"
     ]
   }
 }

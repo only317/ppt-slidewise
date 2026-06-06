@@ -10,3 +10,4 @@ frontend/dist/
 frontend/node_modules/
 *.log
 .DS_Store
+frontend/tsconfig.tsbuildinfo
