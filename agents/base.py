@@ -88,10 +88,13 @@ class SandboxedExecutor:
     # -- file operations ---------------------------------------------
 
     def read_file(self, relative_path: str) -> str:
-        """Read a file within the session workspace."""
-        path = self._safe_path(relative_path, must_exist=True)
-        logger.info(f"[sandbox] READ {relative_path}")
-        return path.read_text(encoding="utf-8", errors="replace")
+        """Read a file within the session workspace. Returns [NOT FOUND] if missing."""
+        try:
+            path = self._safe_path(relative_path, must_exist=True)
+            logger.info(f"[sandbox] READ {relative_path}")
+            return path.read_text(encoding="utf-8", errors="replace")
+        except SandboxError:
+            return f"[NOT FOUND] {relative_path}"
 
     def write_file(self, relative_path: str, content: str) -> str:
         """Write content to a file within the session workspace."""
