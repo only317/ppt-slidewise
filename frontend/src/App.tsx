@@ -54,6 +54,9 @@ export default function App() {
         break
       case 'slide_generated':
         setSlides(s => ({ ...s, [msg.data.index]: msg.data.svg }))
+        if (msg.data.index === 1 || msg.data.index % 3 === 0 || msg.data.index === slideCount.current) {
+          addChat({ role: 'system', type: 'status', text: `正在生成第 ${msg.data.index}/${slideCount.current} 页…` })
+        }
         break
       case 'review_report':
         setReview(msg.data)
@@ -61,6 +64,7 @@ export default function App() {
         break
       case 'slide_fixed':
         setSlides(s => ({ ...s, [msg.data.index]: msg.data.svg }))
+        addChat({ role: 'system', type: 'status', text: `第 ${msg.data.index} 页已修复` })
         break
       case 'done':
         setDone(msg.data)
@@ -108,6 +112,7 @@ export default function App() {
       fullText = `用${names[styleTag] || styleTag}风格。${text}`
     }
     addChat({ role: 'user', text: fullText })
+    addChat({ role: 'system', type: 'status', text: '正在分析…' })
     sendMessage(fullText, uploadedFiles)
     setUploadedFiles([])
     setFileTags([])
