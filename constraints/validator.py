@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 
+try:
+    from engine.text_measurer import estimate_text_width
+except ImportError:  # pragma: no cover - validator can be imported from engine scripts
+    from text_measurer import estimate_text_width
+
 from .guizang import (
     PALETTES,
     TYPOGRAPHY,
@@ -38,6 +43,8 @@ FORBIDDEN_PATTERNS = [
     (r'<g[^>]*\sopacity\s*=', "group opacity — set on children instead"),
     (r'<image[^>]*\sopacity\s*=', "image opacity — use overlay instead"),
 ]
+
+_ATTR_RE = re.compile(r'([:\w-]+)\s*=\s*"([^"]*)"')
 
 
 @dataclass
@@ -92,6 +99,8 @@ class ConstraintValidator:
         issues += self._check_svg_compat(svg_text, page_index)
         issues += self._check_color_usage(svg_text, page_index)
         issues += self._check_typography(svg_text, page_index)
+        issues += self._check_contrast(svg_text, page_index)
+        issues += self._check_overlaps(svg_text, page_index)
         return issues
 
     def validate_breathing_rhythm(self, layout_sequence: List[str]) -> List[ValidationIssue]:
@@ -227,3 +236,185 @@ class ConstraintValidator:
                 ))
 
         return issues
+
+    def _check_contrast(self, svg_text: str, page_index: int) -> List[ValidationIssue]:
+        issues: List[ValidationIssue] = []
+        rects = _parse_rects(svg_text)
+        default_bg = _first_background_fill(svg_text) or self.palette.paper
+
+        for text_el in _parse_text_elements(svg_text):
+            fill = text_el.get("fill") or self.palette.ink
+            bg = _background_at(text_el["x"], text_el["y"], rects, default_bg)
+            ratio = _contrast_ratio(fill, bg)
+            if ratio is None:
+                continue
+            threshold = 3.0 if text_el["font_size"] >= 24 else 4.5
+            if ratio < threshold:
+                issues.append(ValidationIssue(
+                    page_index=page_index,
+                    severity="error" if ratio < threshold * 0.7 else "warning",
+                    category="accessibility",
+                    description=(
+                        f"Text contrast {ratio:.2f}:1 below WCAG AA "
+                        f"threshold {threshold:.1f}:1 for '{text_el['text'][:30]}...'"
+                    ),
+                    element_id=text_el.get("id", ""),
+                    suggested_fix=(
+                        f"Use a higher-contrast text color such as {self.palette.ink} "
+                        f"or {self.palette.text_on_paper}."
+                    ),
+                ))
+
+        return issues
+
+    def _check_overlaps(self, svg_text: str, page_index: int) -> List[ValidationIssue]:
+        issues: List[ValidationIssue] = []
+        texts = _text_boxes(svg_text)
+
+        for i, a in enumerate(texts):
+            for b in texts[i + 1:]:
+                ratio = _overlap_ratio(a, b)
+                if ratio <= 0.05:
+                    continue
+                issues.append(ValidationIssue(
+                    page_index=page_index,
+                    severity="warning" if ratio < 0.2 else "error",
+                    category="layout",
+                    description=(
+                        f"Text elements overlap by {ratio:.0%}: "
+                        f"'{a['text'][:18]}...' vs '{b['text'][:18]}...'"
+                    ),
+                    element_id=a.get("id") or b.get("id", ""),
+                    suggested_fix="Move one text element or reduce font size to avoid overlap.",
+                ))
+
+        return issues
+
+
+def _parse_attrs(attr_text: str) -> Dict[str, str]:
+    return {m.group(1): m.group(2) for m in _ATTR_RE.finditer(attr_text)}
+
+
+def _float_attr(attrs: Dict[str, str], name: str, default: float = 0.0) -> float:
+    raw = attrs.get(name)
+    if raw is None:
+        return default
+    match = re.match(r'\s*(-?\d+(?:\.\d+)?)', raw)
+    return float(match.group(1)) if match else default
+
+
+def _strip_tags(text: str) -> str:
+    text = re.sub(r'<tspan[^>]*>', '', text)
+    text = re.sub(r'</tspan>', '', text)
+    text = re.sub(r'<[^>]+>', '', text)
+    return text.strip()
+
+
+def _parse_text_elements(svg_text: str) -> List[Dict]:
+    elements: List[Dict] = []
+    for match in re.finditer(r'<text\b([^>]*)>(.*?)</text>', svg_text, re.DOTALL | re.IGNORECASE):
+        attrs = _parse_attrs(match.group(1))
+        content = _strip_tags(match.group(2))
+        if not content:
+            continue
+        elements.append({
+            "id": attrs.get("id", ""),
+            "text": content,
+            "x": _float_attr(attrs, "x", 0.0),
+            "y": _float_attr(attrs, "y", 0.0),
+            "font_size": _float_attr(attrs, "font-size", 18.0),
+            "fill": attrs.get("fill", ""),
+        })
+    return elements
+
+
+def _parse_rects(svg_text: str) -> List[Dict]:
+    rects: List[Dict] = []
+    for order, match in enumerate(re.finditer(r'<rect\b([^>]*)>', svg_text, re.IGNORECASE)):
+        attrs = _parse_attrs(match.group(1))
+        fill = attrs.get("fill", "")
+        if not fill.startswith("#"):
+            continue
+        rects.append({
+            "order": order,
+            "x": _float_attr(attrs, "x", 0.0),
+            "y": _float_attr(attrs, "y", 0.0),
+            "w": _float_attr(attrs, "width", 0.0),
+            "h": _float_attr(attrs, "height", 0.0),
+            "fill": fill,
+        })
+    return rects
+
+
+def _first_background_fill(svg_text: str) -> Optional[str]:
+    match = re.search(r'<rect\b([^>]*)>', svg_text, re.IGNORECASE)
+    if not match:
+        return None
+    attrs = _parse_attrs(match.group(1))
+    fill = attrs.get("fill", "")
+    return fill if fill.startswith("#") else None
+
+
+def _background_at(x: float, y: float, rects: List[Dict], default_bg: str) -> str:
+    bg = default_bg
+    for rect in rects:
+        if rect["w"] <= 0 or rect["h"] <= 0:
+            continue
+        if rect["x"] <= x <= rect["x"] + rect["w"] and rect["y"] <= y <= rect["y"] + rect["h"]:
+            bg = rect["fill"]
+    return bg
+
+
+def _hex_to_rgb(color: str) -> Optional[Tuple[int, int, int]]:
+    match = re.fullmatch(r'#([0-9a-fA-F]{6})', color.strip())
+    if not match:
+        return None
+    raw = match.group(1)
+    return int(raw[0:2], 16), int(raw[2:4], 16), int(raw[4:6], 16)
+
+
+def _linear_channel(value: int) -> float:
+    c = value / 255.0
+    if c <= 0.03928:
+        return c / 12.92
+    return ((c + 0.055) / 1.055) ** 2.4
+
+
+def _relative_luminance(color: str) -> Optional[float]:
+    rgb = _hex_to_rgb(color)
+    if rgb is None:
+        return None
+    r, g, b = (_linear_channel(v) for v in rgb)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contrast_ratio(fg: str, bg: str) -> Optional[float]:
+    l1 = _relative_luminance(fg)
+    l2 = _relative_luminance(bg)
+    if l1 is None or l2 is None:
+        return None
+    light, dark = max(l1, l2), min(l1, l2)
+    return (light + 0.05) / (dark + 0.05)
+
+
+def _text_boxes(svg_text: str) -> List[Dict]:
+    boxes: List[Dict] = []
+    for el in _parse_text_elements(svg_text):
+        width = estimate_text_width(el["text"], el["font_size"])
+        height = el["font_size"] * 1.25
+        top = el["y"] - height * 0.8
+        boxes.append({
+            **el,
+            "left": el["x"],
+            "right": el["x"] + width,
+            "top": top,
+            "bottom": top + height,
+            "area": max(width * height, 1.0),
+        })
+    return boxes
+
+
+def _overlap_ratio(a: Dict, b: Dict) -> float:
+    x_overlap = max(0.0, min(a["right"], b["right"]) - max(a["left"], b["left"]))
+    y_overlap = max(0.0, min(a["bottom"], b["bottom"]) - max(a["top"], b["top"]))
+    return (x_overlap * y_overlap) / max(min(a["area"], b["area"]), 1.0)

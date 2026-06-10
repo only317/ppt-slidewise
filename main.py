@@ -96,6 +96,81 @@ async def send_agent_message(ws, agent: str, text: str):
         pass
 
 
+def _add_programmatic_review_issues(review_data: dict, slides: List[dict], palette: str) -> dict:
+    """Supplement LLM review with deterministic SVG/layout checks."""
+    validator = ConstraintValidator(palette)
+    issue_keys = {
+        (
+            iss.get("page"),
+            iss.get("severity"),
+            iss.get("category"),
+            iss.get("description"),
+            iss.get("element_id", ""),
+        )
+        for iss in review_data.get("issues", [])
+    }
+
+    def add_issue(issue: dict) -> None:
+        key = (
+            issue.get("page"),
+            issue.get("severity"),
+            issue.get("category"),
+            issue.get("description"),
+            issue.get("element_id", ""),
+        )
+        if key in issue_keys:
+            return
+        issue_keys.add(key)
+        review_data.setdefault("issues", []).append(issue)
+
+    for si in slides:
+        svg = si.get("svg", "")
+        idx = si.get("index", 0)
+        for iss in validator.validate_svg_content(svg, idx):
+            add_issue({
+                "page": iss.page_index,
+                "severity": iss.severity,
+                "category": iss.category,
+                "element_id": iss.element_id,
+                "description": iss.description,
+                "suggestion": iss.suggested_fix,
+            })
+
+        for m in measure_svg_text(svg, use_pil=True):
+            if m.overflow_ratio <= 1.02:
+                continue
+            sev = "error" if m.overflow_ratio > 1.15 else "warning" if m.overflow_ratio > 1.05 else "suggestion"
+            add_issue({
+                "page": idx,
+                "severity": sev,
+                "category": "layout",
+                "element_id": m.element_id,
+                "description": (
+                    f"PIL measured overflow: '{m.text[:30]}...' "
+                    f"({m.measured_width:.0f}px) in container "
+                    f"({m.container_width:.0f}px, {m.overflow_ratio-1:.0%})"
+                ),
+                "suggestion": "Shorten text or reduce font size to fit container",
+            })
+
+    return review_data
+
+
+def _load_current_slides(executor: SandboxedExecutor) -> List[dict]:
+    """Load current SVG files from the session workspace."""
+    slides = []
+    for f in sorted(executor.list_dir("svg_output")):
+        if f.endswith(".svg") and ".before_fix" not in f:
+            try:
+                svg_content = executor.read_file(f"svg_output/{f}")
+                idx_match = re.search(r'slide_(\d+)', f)
+                idx = int(idx_match.group(1)) if idx_match else 0
+                slides.append({"index": idx, "svg": svg_content, "layout": "", "title": ""})
+            except Exception:
+                pass
+    return slides
+
+
 # Serve frontend
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
@@ -556,34 +631,7 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
         logger.error(f"Reviewer error: {e}")
         review_data = {"issues": [], "summary": f"Reviewer unavailable: {e}"}
 
-    # Supplement with ConstraintValidator
-    validator = ConstraintValidator(palette)
-    for si in generated_slides:
-        svg_issues = validator.validate_svg_content(si["svg"], si["index"])
-        for iss in svg_issues:
-            review_data.setdefault("issues", []).append({
-                "page": iss.page_index,
-                "severity": iss.severity,
-                "category": iss.category,
-                "element_id": iss.element_id,
-                "description": iss.description,
-                "suggestion": iss.suggested_fix,
-            })
-
-    # Text measurement (Layer 2 — PIL precise)
-    for si in generated_slides:
-        measured = measure_svg_text(si["svg"], use_pil=True)
-        overflow_items = [m for m in measured if m.overflow_ratio > 1.02]
-        for m in overflow_items:
-            sev = "error" if m.overflow_ratio > 1.15 else "warning" if m.overflow_ratio > 1.05 else "suggestion"
-            review_data.setdefault("issues", []).append({
-                "page": si["index"],
-                "severity": sev,
-                "category": "layout",
-                "element_id": m.element_id,
-                "description": f"PIL measured overflow: '{m.text[:30]}...' ({m.measured_width:.0f}px) in container ({m.container_width:.0f}px, {m.overflow_ratio-1:.0%})",
-                "suggestion": "Shorten text or reduce font size to fit container",
-            })
+    review_data = _add_programmatic_review_issues(review_data, generated_slides, palette)
 
     # Reviewer speaks
     issue_count = len(review_data.get("issues", []))
@@ -763,6 +811,8 @@ async def handle_fix_decisions(ws: WebSocket, raw: dict, executor: SandboxedExec
     except Exception as e:
         new_review = {"issues": [], "summary": f"Re-review failed: {e}"}
 
+    current_slides = _load_current_slides(executor)
+    new_review = _add_programmatic_review_issues(new_review, current_slides, palette)
     new_review["round"] = current_round
     executor.write_file("review_report.json", json.dumps(new_review, ensure_ascii=False, indent=2))
 
@@ -918,6 +968,13 @@ async def handle_undo_fix(ws: WebSocket, executor: SandboxedExecutor, session_id
             logger.error(f"Re-review after undo failed: {e}")
             new_review = {"issues": [], "summary": f"Re-review failed: {e}"}
 
+        try:
+            outline_data = json.loads(executor.read_file("outline_confirmed.json"))
+        except Exception:
+            outline_data = {"meta": {}}
+        meta = outline_data.get("meta") or {}
+        palette = meta.get("palette", "indigo") if isinstance(meta, dict) else "indigo"
+        new_review = _add_programmatic_review_issues(new_review, current_slides, palette)
         new_review["round"] = 0
         executor.write_file("review_report.json", json.dumps(new_review, ensure_ascii=False, indent=2))
 

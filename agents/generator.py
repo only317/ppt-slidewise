@@ -194,7 +194,32 @@ class GeneratorAgent(BaseAgent):
         prompt = self.system_prompt.replace("{generation_mode}", mode)
         parts = [prompt]
 
-        # Design spec (first call only — skip if already in context)
+        # Extract page info early — needed for palette hints below
+        idx = page_outline.get("index", 0)
+        title = page_outline.get("title", "Untitled")
+        layout = page_outline.get("layout", "L3")
+        bullets = page_outline.get("bullets", [])
+        notes = page_outline.get("notes", "")
+
+        # ── Palette identity lock (ALWAYS present — prevents style drift) ──
+        from constraints.guizang import get_palette, get_page_colors
+        p = get_palette(palette)
+        colors = get_page_colors(palette, layout)
+        page_type_hint = (
+            "HERO (dark background)"
+            if layout in ("L1", "L2", "L7") else
+            "CONTENT (light paper background)"
+        )
+        parts.append(
+            f"## FIXED PALETTE — LOCKED FOR ALL PAGES\n"
+            f"Name: \"{p.name}\"  |  Family: Style {p.family}\n"
+            f"Description: {p.description}\n"
+            f"Accent color (bullet markers, section numbers, thin rules): {p.anchor}\n"
+            f"CRITICAL: This palette is LOCKED. Do NOT read guizang.py and pick "
+            f"a different palette. Every page in this deck MUST use this same palette.\n"
+        )
+
+        # Design spec (first call only — token saving)
         if design_spec and not previous_slides:
             parts.append(f"## DESIGN SPECIFICATION\n{design_spec[:3000]}")
 
@@ -208,19 +233,15 @@ class GeneratorAgent(BaseAgent):
                     f"```xml\n{svg_preview}\n```"
                 )
 
-        # Current page
-        idx = page_outline.get("index", 0)
-        title = page_outline.get("title", "Untitled")
-        layout = page_outline.get("layout", "L3")
-        bullets = page_outline.get("bullets", [])
-        notes = page_outline.get("notes", "")
-
-        # Per-page color hint
-        from constraints.guizang import get_page_colors
-        colors = get_page_colors(palette, layout)
-        parts.append(f"## COLORS FOR THIS PAGE\n"
-                     f"Background: {colors['bg']} | Text: {colors['text']} | "
-                     f"Accent: {colors['anchor']}")
+        # Per-page colors — explicit page-type context so LLM applies
+        # the correct hero/content rule for Style A vs Style B
+        parts.append(
+            f"## THIS PAGE COLORS (page type: {page_type_hint})\n"
+            f"Background (fill full 1280×720 rect): {colors['bg']}\n"
+            f"Text (all <text> elements): {colors['text']}\n"
+            f"Accent (bullet markers, rules, data highlights): {colors['anchor']}\n"
+            f"Use ONLY these three colors for this page. No other palette."
+        )
 
         parts.append(f"## CURRENT PAGE — Slide {idx}")
         parts.append(f"Title: {title}")

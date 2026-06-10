@@ -40,6 +40,29 @@ class MeasuredText:
     method: str = "estimate"  # "estimate" | "pil"
 
 
+_ATTR_RE = re.compile(r'([:\w-]+)\s*=\s*"([^"]*)"')
+
+
+def _parse_attrs(attr_text: str) -> Dict[str, str]:
+    """Parse simple SVG attributes from a tag."""
+    return {m.group(1): m.group(2) for m in _ATTR_RE.finditer(attr_text)}
+
+
+def _float_attr(attrs: Dict[str, str], name: str, default: float = 0.0) -> float:
+    raw = attrs.get(name)
+    if raw is None:
+        return default
+    match = re.match(r'\s*(-?\d+(?:\.\d+)?)', raw)
+    return float(match.group(1)) if match else default
+
+
+def _strip_svg_tags(content: str) -> str:
+    content = re.sub(r'<tspan[^>]*>', '', content)
+    content = re.sub(r'</tspan>', '', content)
+    content = re.sub(r'<[^>]+>', '', content)
+    return content.strip()
+
+
 # ============================================================
 # Layer A: Fast heuristic estimation (no dependencies)
 # ============================================================
@@ -171,11 +194,12 @@ def parse_svg_text_elements(svg_content: str) -> List[TextElement]:
         attrs = attrs_match.group(1)
 
         # Parse attributes
-        x = float(re.search(r'x="([\d.]+)"', attrs).group(1)) if re.search(r'x="([\d.]+)"', attrs) else 0.0
-        y = float(re.search(r'y="([\d.]+)"', attrs).group(1)) if re.search(r'y="([\d.]+)"', attrs) else 0.0
-        font_size = float(re.search(r'font-size="([\d.]+)"', attrs).group(1)) if re.search(r'font-size="([\d.]+)"', attrs) else 18.0
-        font_family = re.search(r'font-family="([^"]*)"', attrs).group(1) if re.search(r'font-family="([^"]*)"', attrs) else "Microsoft YaHei"
-        el_id = re.search(r'id="([^"]*)"', attrs).group(1) if re.search(r'id="([^"]*)"', attrs) else ""
+        parsed_attrs = _parse_attrs(attrs)
+        x = _float_attr(parsed_attrs, "x", 0.0)
+        y = _float_attr(parsed_attrs, "y", 0.0)
+        font_size = _float_attr(parsed_attrs, "font-size", 18.0)
+        font_family = parsed_attrs.get("font-family", "Microsoft YaHei")
+        el_id = parsed_attrs.get("id", "")
 
         # Extract text content
         content_match = re.search(r'<text[^>]*>(.*?)</text>', block_text, re.DOTALL)
@@ -183,15 +207,12 @@ def parse_svg_text_elements(svg_content: str) -> List[TextElement]:
             continue
         content = content_match.group(1)
 
-        # Strip nested tags (<tspan>)
-        content = re.sub(r'<tspan[^>]*>', '', content)
-        content = re.sub(r'</tspan>', '', content)
-        content = content.strip()
+        content = _strip_svg_tags(content)
         if not content:
             continue
 
         # Estimate container width from parent rect
-        container_w = _find_container_width(svg_content, x)
+        container_w = _find_container_width(svg_content, x, y)
 
         elements.append(TextElement(
             text=content, font_size=font_size, font_family=font_family,
@@ -201,21 +222,28 @@ def parse_svg_text_elements(svg_content: str) -> List[TextElement]:
     return elements
 
 
-def _find_container_width(svg_content: str, text_x: float) -> float:
+def _find_container_width(svg_content: str, text_x: float, text_y: Optional[float] = None) -> float:
     """
     Heuristic: find the nearest <rect> or layout zone that contains text_x.
     Defaults to 1280 - margins if not found.
     """
-    rects = re.finditer(
-        r'<rect[^>]*x="([\d.]+)"[^>]*width="([\d.]+)"',
-        svg_content
-    )
     best_w = 1120.0  # default safe width (1280 - 80*2 margins)
-    for r in rects:
-        rx = float(r.group(1))
-        rw = float(r.group(2))
+    candidates: List[float] = []
+    for r in re.finditer(r'<rect\b([^>]*)>', svg_content, re.IGNORECASE):
+        attrs = _parse_attrs(r.group(1))
+        rx = _float_attr(attrs, "x", 0.0)
+        ry = _float_attr(attrs, "y", 0.0)
+        rw = _float_attr(attrs, "width", 0.0)
+        rh = _float_attr(attrs, "height", 0.0)
+        if rw <= 0 or rw >= 1200:
+            continue
+        if text_y is not None and rh > 0 and not (ry <= text_y <= ry + rh + 8):
+            continue
         if rx <= text_x <= rx + rw:
-            return rw
+            candidates.append(rw)
+    if candidates:
+        non_page = [w for w in candidates if w < 1200]
+        best_w = min(non_page or candidates)
     return best_w
 
 
@@ -248,3 +276,107 @@ def measure_svg_text(svg_content: str, use_pil: bool = True) -> List[MeasuredTex
         ))
 
     return results
+
+
+def _role_min_font_size(font_size: float) -> float:
+    """Return the conservative lower bound for the inferred typography role."""
+    if font_size >= 72:
+        return 48.0
+    if font_size >= 48:
+        return 40.0
+    if font_size >= 28:
+        return 28.0
+    if font_size >= 14:
+        return 12.0
+    return 8.0
+
+
+def _fit_font_size(
+    text: str,
+    current_size: float,
+    font_family: str,
+    container_width: float,
+    use_pil: bool = True,
+) -> float:
+    """Find the largest safe font size no larger than current_size."""
+    lower = min(_role_min_font_size(current_size), current_size)
+    upper = current_size
+
+    def width_at(size: float) -> float:
+        if use_pil:
+            return measure_text_width_pil(text, size, font_family)[0]
+        return estimate_text_width(text, size)
+
+    if width_at(upper) <= container_width:
+        return current_size
+    if width_at(lower) > container_width:
+        return lower
+
+    for _ in range(12):
+        mid = (lower + upper) / 2.0
+        if width_at(mid) <= container_width:
+            lower = mid
+        else:
+            upper = mid
+    return lower
+
+
+def optimize_svg_text_sizes(
+    svg_content: str,
+    use_pil: bool = True,
+    overflow_threshold: float = 1.02,
+) -> Tuple[str, int]:
+    """
+    Shrink overflowing text within typography-role lower bounds.
+
+    This is intentionally conservative: it never increases font sizes and it
+    only rewrites the font-size attribute of text elements whose measured width
+    exceeds their inferred container.
+    """
+    changed_count = 0
+
+    def replace_block(match: re.Match) -> str:
+        nonlocal changed_count
+        block = match.group(0)
+        attrs_match = re.search(r'<text([^>]*)>', block, re.DOTALL)
+        content_match = re.search(r'<text[^>]*>(.*?)</text>', block, re.DOTALL)
+        if not attrs_match or not content_match:
+            return block
+
+        attrs_text = attrs_match.group(1)
+        attrs = _parse_attrs(attrs_text)
+        old_size = _float_attr(attrs, "font-size", 18.0)
+        x = _float_attr(attrs, "x", 0.0)
+        font_family = attrs.get("font-family", "Microsoft YaHei")
+        text = _strip_svg_tags(content_match.group(1))
+        if not text or old_size <= 0:
+            return block
+
+        y = _float_attr(attrs, "y", 0.0)
+        container_width = _find_container_width(svg_content, x, y)
+        measured = (
+            measure_text_width_pil(text, old_size, font_family)[0]
+            if use_pil else estimate_text_width(text, old_size)
+        )
+        if measured / max(container_width, 1.0) <= overflow_threshold:
+            return block
+
+        new_size = _fit_font_size(text, old_size, font_family, container_width, use_pil)
+        if old_size - new_size < 0.75:
+            return block
+
+        new_size_text = str(int(round(new_size)))
+        if "font-size" in attrs:
+            new_block = re.sub(
+                r'font-size="[^"]*"',
+                f'font-size="{new_size_text}"',
+                block,
+                count=1,
+            )
+        else:
+            new_block = block.replace("<text", f'<text font-size="{new_size_text}"', 1)
+        changed_count += 1
+        return new_block
+
+    optimized = re.sub(r'<text\b[^>]*>.*?</text>', replace_block, svg_content, flags=re.DOTALL)
+    return optimized, changed_count
