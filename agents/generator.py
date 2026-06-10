@@ -223,9 +223,30 @@ class GeneratorAgent(BaseAgent):
             f"a different palette. Every page in this deck MUST use this same palette.\n"
         )
 
-        # Design spec (first call only — token saving)
-        if design_spec and not previous_slides:
-            parts.append(f"## DESIGN SPECIFICATION\n{design_spec[:3000]}")
+        # ── Source context (ALWAYS present — prevents content hallucination) ──
+        # If the outline lacks bullets, the LLM will fabricate content unless we
+        # give it the design_spec and an explicit instruction to read sources.
+        _has_real_content = bool(
+            [b for b in bullets if len(str(b).strip()) > 5]
+        ) or bool(notes.strip())
+
+        if design_spec:
+            # Condensed source context for every page (≈ the project intro + this page's section)
+            source_context = _extract_source_context(design_spec, idx, title, max_chars=2000)
+            parts.append(source_context)
+
+        if not _has_real_content:
+            parts.append(
+                "## CONTENT WARNING — NO BULLETS PROVIDED\n"
+                "The outline has NO bullets for this page. You MUST call "
+                "read_file(\"design_spec.md\") to find what this page should contain. "
+                "If that fails, read the source files under sources/. "
+                "NEVER fabricate generic content — every bullet must relate to "
+                "this specific project based on what you read from the design spec "
+                "and source materials.\n"
+            )
+            # Also force-inject the full design_spec as fallback
+            parts.append(f"## FULL DESIGN SPECIFICATION (read if content missing)\n{design_spec[:4000]}")
 
         # Previous slides are structure anchors only; colors are locked below.
         if previous_slides:
@@ -275,6 +296,80 @@ class GeneratorAgent(BaseAgent):
         )
 
         return "\n\n".join(parts)
+
+
+# ── Source context extraction ───────────────────────────────────────────
+
+def _extract_source_context(
+    design_spec: str,
+    page_index: int,
+    page_title: str,
+    max_chars: int = 2000,
+) -> str:
+    """
+    Extract the project summary + this page's content row from design_spec.md.
+    Returns a condensed context block suitable for every page's prompt.
+    """
+    import re
+
+    # 1. Extract Section I (project info — first 500 chars after the heading)
+    sec_i = ""
+    m = re.search(
+        r'## I[. ]?\s*项目(?:信息|概述).*?\n(.*?)(?=## II[. ])',
+        design_spec, re.DOTALL,
+    )
+    if m:
+        sec_i = m.group(1).strip()[:500]
+
+    # 2. Extract the content outline section (Section IX / 九)
+    outline_section = ""
+    for pat in (r'## IX[. ]', r'## 九[.、]', r'IX[. ]\s*Content Outline'):
+        m = re.search(pat + r'(.*?)(?=## X[. ]|## [XVI]+[. ]|\Z)', design_spec, re.DOTALL)
+        if m:
+            outline_section = m.group(1) if m.lastindex else m.group(0)
+            outline_section = outline_section.strip()[:3000]
+            break
+
+    # 3. Find the row for this specific page in the content outline
+    page_row = ""
+    if outline_section:
+        for line in outline_section.split("\n"):
+            # Match table rows like: | 3 | 项目背景 | L3 | ... |
+            m = re.match(
+                rf'\|\s*{page_index}\s*\|\s*(.+?)\s*\|\s*(L\d)\s*\|',
+                line,
+            )
+            if m:
+                page_title_from_table = m.group(1).strip()
+                page_layout = m.group(2).strip()
+                rest = line[m.end():].strip()
+                page_row = (
+                    f"Page {page_index}: title=\"{page_title_from_table}\", "
+                    f"layout={page_layout}"
+                )
+                if rest and rest != "|":
+                    page_row += f", notes=\"{rest.strip('| ')}\""
+                break
+
+    if not page_row:
+        page_row = f"Page {page_index}: title=\"{page_title}\" (no content outline row found)"
+
+    # 4. Build the context block
+    parts = ["## PROJECT SOURCE CONTEXT (this is what the presentation is about)"]
+    if sec_i:
+        parts.append(f"Project description:\n{sec_i}")
+    parts.append(f"Content outline for this page:\n{page_row}")
+    parts.append(
+        "CRITICAL: Every bullet on this slide must be about the project "
+        "described above. Do NOT fabricate content about unrelated topics. "
+        "If you need more detail, call read_file(\"design_spec.md\") or "
+        "read_file(\"sources/repo/README.md\")."
+    )
+
+    context = "\n\n".join(parts)
+    if len(context) > max_chars:
+        context = context[:max_chars] + "\n... (truncated, use read_file for full content)"
+    return context
 
 
 def extract_svg_from_response(response: str) -> str:

@@ -60,6 +60,14 @@ When the user uploads a ZIP or provides a GitHub URL (repo at sources/repo/):
 - Key Modules (L3): 1 slide per major module (what it does, key APIs/classes/functions)
 - Setup & Run (L3): install, configure, run — extracted from README or config files
 
+**IMPORTANT — After reading the repo, your outline JSON MUST include detailed bullets:**
+- Do NOT leave bullets empty just because the repo has many files.
+- For architecture slides: list each module with a 1-line description as a bullet.
+- For module slides: list the key functions/classes/files as bullets.
+- For setup slides: list the install steps / config options as bullets.
+- Copy specific file paths, function names, and descriptions from the actual repo files.
+- If you cannot produce bullets for a content page, that page should not exist.
+
 ## Constraint System (READ FIRST)
 Use `read_reference("constraints/guizang.py")` to load the full palette and layout system.
 
@@ -144,6 +152,15 @@ A JSON object the frontend uses for the design preview:
   "pages": [
     {"index": 1, "title": "...", "layout": "L1", "bullets": [...], "notes": "..."}
   ]
+
+## CRITICAL — BULLET CONTENT REQUIREMENTS
+- **Every non-hero page (L3/L4/L5/L6) MUST have 3-5 substantive bullet points.**
+- Each bullet must be a complete sentence or meaningful phrase (15-40 Chinese chars)
+  directly extracted or summarized from the source materials.
+- Empty bullets (`"bullets": []`) will cause the Generator to fabricate content.
+- For GitHub repos: extract bullets from README sections, key modules, architecture descriptions.
+- For L1/L2/L7 (cover/section/back): bullets can be empty — these pages use large titles anyway.
+- Bullets IS the primary content the Generator uses — if they are missing, the output will be WRONG.
 }
 ```
 
