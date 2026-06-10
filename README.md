@@ -1,6 +1,6 @@
-# SlideWise
+﻿# SlideWise
 
-> Agent-driven PPT generation with Guizang aesthetics. Chat with AI → get a truly editable `.pptx`.  
+> Agent-driven PPT generation with Guizang aesthetics. Chat with AI -> get a truly editable `.pptx`.  
 > 计算机图形学 Project 3 — 生成式AI实践
 
 Drop a PDF, paste a GitHub link, upload a ZIP, or just type a topic. SlideWise generates a professionally styled `.pptx` — every text box and shape is a native PowerPoint object.
@@ -26,16 +26,42 @@ Open **http://localhost:8888**.
 
 ## Features
 
-- **Chat-driven**: natural language interface — just describe what you want
+- **Conversational interaction**: chat-driven workflow — describe what you want, give feedback in natural language
 - **Multi-input**: topic text, PDF papers, Markdown outlines, GitHub repos, ZIP projects
-- **Dual-agent quality loop**: Generator → Reviewer → fix cycle
+- **3-Agent pipeline**: Strategist (planning) → Generator (SVG creation) → Reviewer (quality audit)
+- **Transparent AI process**: see each agent's thinking process in real-time (tool calls, analysis steps)
+- **Agent identity**: each agent has distinct visual identity — you know who's speaking
+- **Review with control**: per-page issue cards, selective fix, batch fix, undo all changes
+- **Before/after comparison**: see old vs new version after fixes
+- **Natural language review**: tell the reviewer what to change in plain text during review phase
 - **SVG → DrawingML compiler**: editable `.pptx` output (not flat images)
 - **Session persistence**: refresh-safe, resume previous sessions
 - **Cancel generation**: stop mid-generation if you change your mind
 
+## Interaction Flow
+
+```
+User input → Strategist analyzes → outline preview
+    ↓ (user confirms / edits / chats to modify)
+Generator creates slides (real-time preview)
+    ↓
+Reviewer audits quality
+    ↓ (user decides: fix all / fix specific / undo / export)
+Generator fixes → user confirms → export .pptx
+```
+
+All interactions happen in the chat panel. Users can:
+- Edit outline titles/layouts directly, or describe changes in natural language
+- See agent thinking process (tool calls, file reads) in collapsible bubbles
+- Review issues per-page with severity indicators on slide previews
+- Fix selectively, add per-page or global feedback
+- Undo all fixes to revert to pre-fix version
+- Compare old vs new versions after each fix
+- Skip review and export directly at any point
+
 ## Style System
 
-Copied from [Guizang PPT Skill](https://github.com/op7418/guizang-ppt-skill) by 歸藏.
+Copied from [Guizang PPT Skill](https://github.com/op7418/guizang-ppt-skill) by 歌藏.
 
 ### Style A — 电子杂志 × 电子墨水
 
@@ -57,7 +83,7 @@ Unified warm off-white background + single saturated accent. Grid-first, sharp c
 |-------|-----|------|--------|
 | 克莱因蓝 IKB | `#fafaf8` | `#0a0a0a` | `#002FA7` |
 | 柠檬黄 Lemon | `#fafaf8` | `#0a0a0a` | `#FFD500` |
-| 柠绿 Lime | `#fafaf8` | `#0a0a0a` | `#C5E803` |
+| 柠檬绿 Lime | `#fafaf8` | `#0a0a0a` | `#C5E803` |
 | 安全橙 Safety Orange | `#fafaf8` | `#0a0a0a` | `#FF6B35` |
 
 ## Architecture
@@ -65,16 +91,17 @@ Unified warm off-white background + single saturated accent. Grid-first, sharp c
 ```
 Browser (React SPA) ←WebSocket→ FastAPI Backend
                                 │
-                ┌───────────────┼───────────────┐
-                ▼               ▼               ▼
-          Strategist       Generator        Reviewer
-          (outline)        (per-page SVG)   (quality audit)
-                                │
+                    ┌───────────┼───────────┐
+                    ▼           ▼           ▼
+              Strategist    Generator    Reviewer
+              (outline)    (per-page SVG) (quality audit)
+                    │           │           │
+                    └───────────┼───────────┘
                                 ▼
                       SVG → DrawingML → .pptx
 ```
 
-Three DeepSeek V4 Flash agents with role separation via System Prompts. Programmatic `ConstraintValidator` and PIL-based text measurement supplement the Reviewer.
+Three DeepSeek agents with role separation via System Prompts. Programmatic `ConstraintValidator` and PIL-based text measurement supplement the Reviewer.
 
 ## Project Structure
 

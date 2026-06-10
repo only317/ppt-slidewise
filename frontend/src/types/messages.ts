@@ -70,6 +70,32 @@ export interface UploadedFile {
   type: string
 }
 
+// ---- Agent Conversational ----
+export interface AgentThinkingData {
+  agent: string       // 'strategist' | 'generator' | 'reviewer'
+  text: string
+  tool_name: string
+  tool_args: string
+}
+
+export interface AgentMessageData {
+  agent: string
+  text: string
+  markdown: boolean
+}
+
+export interface PageFixedConfirmData {
+  index: number
+  svg: string
+  old_svg: string
+  fix_round: number
+}
+
+export interface FixBatchDoneData {
+  fixed_pages: number[]
+  total_issues_remaining: number
+}
+
 // ---- Message Union ----
 export type PipelinePhase = 'idle' | 'planning' | 'generating' | 'reviewing' | 'done'
 
@@ -82,3 +108,7 @@ export type ServerMessage =
   | { type: 'error'; data: ErrorData }
   | { type: 'state_sync'; data: StateSyncData }
   | { type: 'session_list'; data: SessionSummary[] }
+  | { type: 'agent_thinking'; data: AgentThinkingData }
+  | { type: 'agent_message'; data: AgentMessageData }
+  | { type: 'page_fixed_confirm'; data: PageFixedConfirmData }
+  | { type: 'fix_batch_done'; data: FixBatchDoneData }

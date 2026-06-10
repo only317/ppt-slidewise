@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
-import type { ServerMessage, OutlineData, ReviewReportData, DoneData, UploadedFile } from './types/messages'
+import type { ServerMessage, OutlineData, ReviewReportData, DoneData, UploadedFile, AgentThinkingData, AgentMessageData, PageFixedConfirmData, FixBatchDoneData } from './types/messages'
 import { useWebSocket } from './hooks/useWebSocket'
 import { ChatPanel } from './components/ChatPanel'
 import type { ChatEntry } from './components/ChatPanel'
@@ -27,6 +27,8 @@ export default function App() {
   const [review, setReview] = useState<ReviewReportData | null>(null)
   const [done, setDone] = useState<DoneData | null>(null)
   const [toasts, setToasts] = useState<string[]>([])
+  const [fixedPages, setFixedPages] = useState<Set<number>>(new Set())
+  const [oldSlides, setOldSlides] = useState<Record<number, string>>({})
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [styleTag, setStyleTag] = useState<string | null>(null)
   const [fileTags, setFileTags] = useState<FileTag[]>([])
@@ -49,6 +51,15 @@ export default function App() {
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
       case 'outline':
+        // Clear non-essential entries from previous rounds
+        setChatHistory(h => h.filter(e =>
+          !('type' in e) || (e.type !== 'agent_thinking' && e.type !== 'status')
+        ))
+        setSlides({})
+        setFixedPages(new Set())
+        setOldSlides({})
+        setReview(null)
+        setDone(null)
         setOutline(msg.data)
         slideCount.current = msg.data.pages.length
         addChat({ role: 'assistant', type: 'outline', data: msg.data })
@@ -60,12 +71,41 @@ export default function App() {
         }
         break
       case 'review_report':
+        // Clear thinking entries from generation phase
+        setChatHistory(h => h.filter(e =>
+          !('type' in e) || e.type !== 'agent_thinking'
+        ))
         setReview(msg.data)
+        setFixedPages(new Set())
+        setOldSlides({})
         addChat({ role: 'assistant', type: 'review', data: msg.data })
         break
       case 'slide_fixed':
-        setSlides(s => ({ ...s, [msg.data.index]: msg.data.svg }))
-        addChat({ role: 'system', type: 'status', text: `第 ${msg.data.index} 页已修复` })
+        setSlides(s => {
+          if (s[msg.data.index]) setOldSlides(o => ({ ...o, [msg.data.index]: s[msg.data.index] }))
+          return { ...s, [msg.data.index]: msg.data.svg }
+        })
+        setFixedPages(prev => new Set(prev).add(msg.data.index))
+        {
+          const oldSvg = slides[msg.data.index] || ''
+          if (oldSvg) {
+            addChat({ role: 'assistant', type: 'slide_diff', index: msg.data.index, oldSvg, newSvg: msg.data.svg })
+          } else {
+            addChat({ role: 'system', type: 'status', text: `\u7b2c${msg.data.index} \u9875\u5df2\u4fee\u590d` })
+          }
+        }
+        break
+      case 'agent_thinking':
+        addChat({ role: 'assistant', type: 'agent_thinking', data: msg.data })
+        break
+      case 'agent_message':
+        addChat({ role: 'assistant', type: 'agent_message', data: msg.data })
+        break
+      case 'page_fixed_confirm':
+        addChat({ role: 'assistant', type: 'page_fixed_confirm', data: msg.data })
+        break
+      case 'fix_batch_done':
+        addChat({ role: 'assistant', type: 'fix_batch_done', data: msg.data })
         break
       case 'done':
         setDone(msg.data)
@@ -96,7 +136,7 @@ export default function App() {
     }
   }, [toast, addChat])
 
-  const { phase, connected, sessions, sendMessage, confirmOutline, fixDecisions, requestDownload, cancel } = useWebSocket(handleMessage)
+  const { phase, connected, sessions, sendMessage, confirmOutline, fixDecisions, confirmPageFix, undoFix, requestDownload, cancel } = useWebSocket(handleMessage)
 
   const handleFiles = useCallback(async (files: FileList) => {
     const result: UploadedFile[] = []
@@ -142,11 +182,21 @@ export default function App() {
       }
     })
     confirmOutline(approved, approved ? [] : pages)
+    setReview(null)
+    setFixedPages(new Set())
   }, [confirmOutline])
 
   const handleFix = useCallback((pages: number[], ignore: number[], feedback = '') => {
     fixDecisions(pages, ignore, feedback)
   }, [fixDecisions])
+
+  const handleConfirmPageFix = useCallback((index: number, approved: boolean, feedback?: string) => {
+    confirmPageFix(index, approved, feedback || '')
+  }, [confirmPageFix])
+
+  const handleUndoFix = useCallback(() => {
+    undoFix()
+  }, [undoFix])
 
   const slideKeys = Object.keys(slides).map(Number).sort((a, b) => a - b)
 
@@ -168,10 +218,12 @@ export default function App() {
         onConfirmOutline={handleConfirmOutline}
         onFix={handleFix}
         onSkipReview={requestDownload}
+        onConfirmPageFix={handleConfirmPageFix}
+        onUndoFix={handleUndoFix}
       />
       <div id="preview-panel">
         <PhaseIndicator phase={phase} slideCount={slides} slideTotal={outline?.pages.length || slideCount.current} onCancel={cancel} />
-        <SlideGrid outline={outline} slides={slides} onSlideClick={setLightboxIndex} />
+        <SlideGrid outline={outline} slides={slides} onSlideClick={setLightboxIndex} review={review} phase={phase} />
       </div>
       <Lightbox
         index={lightboxIndex} slides={slides} slideKeys={slideKeys}

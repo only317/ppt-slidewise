@@ -86,5 +86,13 @@ export function useWebSocket(onMessage: MessageHandler) {
     send({ type: 'cancel', data: {} })
   }, [send])
 
-  return { phase, connected, sidRef, sessions, sendMessage, confirmOutline, fixDecisions, requestDownload, requestSessionList, cancel }
+  const confirmPageFix = useCallback((index: number, approved: boolean, feedback = '') => {
+    send({ type: 'confirm_page_fix', data: { index, approved, feedback } })
+  }, [send])
+
+  const undoFix = useCallback(() => {
+    send({ type: 'undo_fix', data: {} })
+  }, [send])
+
+  return { phase, connected, sidRef, sessions, sendMessage, confirmOutline, fixDecisions, confirmPageFix, undoFix, requestDownload, requestSessionList, cancel }
 }

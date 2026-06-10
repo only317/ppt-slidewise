@@ -34,6 +34,12 @@ class MessageType(StrEnum):
     LIST_SESSIONS = "list_sessions"
     CANCEL = "cancel"
 
+    # Agent conversational (server -> client)
+    AGENT_THINKING = "agent_thinking"
+    AGENT_MESSAGE = "agent_message"
+    PAGE_FIXED_CONFIRM = "page_fixed_confirm"
+    FIX_BATCH_DONE = "fix_batch_done"
+
 
 # ============================================================
 # Server → Client Messages
@@ -120,6 +126,50 @@ class StateSyncMessage(BaseModel):
     type: str = MessageType.STATE_SYNC
     data: StateSyncPayload
 
+# --- Agent Conversational Messages ---
+
+class AgentThinkingPayload(BaseModel):
+    """Stream agent tool-calling / thinking process."""
+    agent: str = ""          # "strategist" | "generator" | "reviewer"
+    text: str = ""
+    tool_name: str = ""
+    tool_args: str = ""
+
+class AgentThinkingMessage(BaseModel):
+    type: str = MessageType.AGENT_THINKING
+    data: AgentThinkingPayload
+
+class AgentMessagePayload(BaseModel):
+    """Agent speaks to user in natural language."""
+    agent: str = ""          # "strategist" | "generator" | "reviewer"
+    text: str = ""
+    markdown: bool = True
+
+class AgentMessageMessage(BaseModel):
+    type: str = MessageType.AGENT_MESSAGE
+    data: AgentMessagePayload
+
+class PageFixedConfirmPayload(BaseModel):
+    """After fixing a page, send result for user confirmation."""
+    index: int
+    svg: str = ""
+    old_svg: str = ""
+    fix_round: int = 1
+
+class PageFixedConfirmMessage(BaseModel):
+    type: str = MessageType.PAGE_FIXED_CONFIRM
+    data: PageFixedConfirmPayload
+
+class FixBatchDonePayload(BaseModel):
+    """All requested fixes complete."""
+    fixed_pages: list = Field(default_factory=list)
+    total_issues_remaining: int = 0
+
+class FixBatchDoneMessage(BaseModel):
+    type: str = MessageType.FIX_BATCH_DONE
+    data: FixBatchDonePayload
+
+
 
 # ============================================================
 # Client → Server Messages
@@ -152,6 +202,24 @@ class FixDecisionsMessage(BaseModel):
     type: str = MessageType.FIX_DECISIONS
     data: FixDecisionsPayload
 
+class ConfirmPageFixPayload(BaseModel):
+    """User confirms or rejects a single page fix."""
+    index: int
+    approved: bool = True
+    feedback: str = ""       # if rejected, user's modification request
+
+class ConfirmPageFixMessage(BaseModel):
+    type: str = "confirm_page_fix"
+    data: ConfirmPageFixPayload
+
+class UndoFixPayload(BaseModel):
+    """User wants to revert all fixes from the last round."""
+    pass
+
+class UndoFixMessage(BaseModel):
+    type: str = "undo_fix"
+    data: UndoFixPayload = Field(default_factory=UndoFixPayload)
+
 class RetrySlidePayload(BaseModel):
     index: int
     feedback: str
@@ -171,12 +239,14 @@ class DownloadMessage(BaseModel):
 
 ServerMessage = (
     OutlineMessage | SlideGeneratedMessage | ReviewReportMessage |
-    SlideFixedMessage | DoneMessage | ErrorMessage | StateSyncMessage
+    SlideFixedMessage | DoneMessage | ErrorMessage | StateSyncMessage |
+    AgentThinkingMessage | AgentMessageMessage |
+    PageFixedConfirmMessage | FixBatchDoneMessage
 )
 
 ClientMessage = (
     UserMessageMessage | ConfirmOutlineMessage | FixDecisionsMessage |
-    RetrySlideMessage | DownloadMessage
+    RetrySlideMessage | DownloadMessage | ConfirmPageFixMessage | UndoFixMessage
 )
 
 
@@ -191,6 +261,10 @@ class WSProtocol:
         MessageType.DONE: DoneMessage,
         MessageType.ERROR: ErrorMessage,
         MessageType.STATE_SYNC: StateSyncMessage,
+        MessageType.AGENT_THINKING: AgentThinkingMessage,
+        MessageType.AGENT_MESSAGE: AgentMessageMessage,
+        MessageType.PAGE_FIXED_CONFIRM: PageFixedConfirmMessage,
+        MessageType.FIX_BATCH_DONE: FixBatchDoneMessage,
     }
 
     CLIENT_HANDLERS = {
@@ -199,6 +273,8 @@ class WSProtocol:
         MessageType.FIX_DECISIONS: FixDecisionsMessage,
         MessageType.RETRY_SLIDE: RetrySlideMessage,
         MessageType.DOWNLOAD: DownloadMessage,
+        "confirm_page_fix": ConfirmPageFixMessage,
+        "undo_fix": UndoFixMessage,
     }
 
     @classmethod

@@ -522,3 +522,302 @@ body{
 .style-chip-name{font-weight:600;font-size:13px}
 .style-chip-desc{font-size:10px;color:var(--text-dim)}
 .style-hint-tip{font-size:10px;color:var(--text-dim);margin-top:10px;text-align:center}
+
+/* ============================================================
+   Review Report — Redesigned
+   ============================================================ */
+
+.review-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.rsb-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+.rsb-error { background: #fef2f2; color: #dc2626; }
+.rsb-warn  { background: #fffbeb; color: #d97706; }
+.rsb-sugg  { background: #f0f9ff; color: #2563eb; }
+.rsb-pages {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
+.review-select-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-dim);
+}
+.btn-select {
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-select:hover {
+  border-color: var(--anchor);
+  color: var(--anchor);
+}
+.rsb-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
+.review-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.review-page-card {
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  transition: all .15s;
+  background: var(--bg-surface);
+}
+.review-page-card.selected {
+  border-color: var(--anchor);
+  background: #f8faff;
+}
+.review-page-card.sev-error {
+  border-left: 3px solid var(--accent-err);
+}
+.review-page-card.sev-warning {
+  border-left: 3px solid var(--accent-warn);
+}
+.review-page-card.sev-suggestion {
+  border-left: 3px solid var(--anchor);
+}
+
+.rpc-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.rpc-header input[type="checkbox"] {
+  accent-color: var(--anchor);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+.rpc-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.rpc-issue-count {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.rpc-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: auto;
+}
+.rpc-badge.error { background: #fef2f2; color: #dc2626; }
+
+.rpc-issues {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rpc-issue {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  flex-wrap: wrap;
+}
+.rpc-sev {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.rpc-sev.error      { background: #fef2f2; color: #dc2626; }
+.rpc-sev.warning    { background: #fffbeb; color: #d97706; }
+.rpc-sev.suggestion { background: #f0f9ff; color: #2563eb; }
+.rpc-cat {
+  font-size: 10px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.rpc-desc {
+  color: var(--text);
+}
+.rpc-sug {
+  color: var(--text-muted);
+  font-style: italic;
+  width: 100%;
+  padding-left: 2px;
+}
+
+.rpc-feedback {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg-deep);
+  outline: none;
+  transition: border-color .15s;
+}
+.rpc-feedback:focus {
+  border-color: var(--anchor);
+}
+.rpc-feedback::placeholder {
+  color: var(--text-dim);
+}
+
+/* ============================================================
+   SlideCard — Issue badges
+   ============================================================ */
+.slide-card.has-issue {
+  border-color: var(--accent-warn);
+}
+.slide-card.has-issue.sev-error {
+  border-color: var(--accent-err);
+}
+
+.issue-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 10px;
+  z-index: 2;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,.1);
+}
+.badge-error { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.badge-warn  { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+.badge-sugg  { background: #f0f9ff; color: #2563eb; border: 1px solid #bfdbfe; }
+
+/* ============================================================
+   Cancel button — also visible in reviewing
+   ============================================================ */
+#btn-cancel {
+  font-size: 11px;
+  padding: 4px 12px;
+  border: 1px solid var(--accent-err);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent-err);
+  cursor: pointer;
+  transition: all .15s;
+  font-weight: 500;
+}
+#btn-cancel:hover {
+  background: var(--accent-err);
+  color: #fff;
+}
+
+/* ============================================================
+   Agent Identity & Conversational
+   ============================================================ */
+
+.agent-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  background: var(--bg-surface);
+}
+.agent-icon {
+  font-size: 14px;
+}
+.agent-name {
+  letter-spacing: .3px;
+}
+
+/* Thinking / tool-call bubble */
+.thinking-message .content.thinking-content {
+  background: var(--bg-hover);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+  opacity: 0.85;
+}
+.thinking-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.thinking-line strong {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-style: normal;
+}
+
+/* Agent message text */
+.agent-text {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+/* ============================================================
+   Slide Diff Preview
+   ============================================================ */
+.diff-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.diff-toggle .btn-select.active {
+  background: var(--anchor);
+  color: #fff;
+  border-color: var(--anchor);
+}
+.diff-preview {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #fff;
+}
+.diff-preview svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

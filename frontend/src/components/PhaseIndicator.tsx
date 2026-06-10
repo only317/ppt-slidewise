@@ -16,7 +16,7 @@ const COLORS: Record<string, string> = {
 
 export function PhaseIndicator({ phase, slideCount, slideTotal, onCancel }: Props) {
   const gen = Object.keys(slideCount).length
-  const cancellable = phase === 'generating'
+  const cancellable = phase === 'generating' || phase === 'reviewing'
   return (
     <div id="preview-header">
       <span className="title">幻灯片预览</span>

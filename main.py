@@ -52,6 +52,11 @@ from protocols.websocket import (
     UserMessageMessage,
     ConfirmOutlineMessage,
     FixDecisionsMessage,
+    AgentThinkingMessage, AgentThinkingPayload,
+    AgentMessageMessage, AgentMessagePayload,
+    FixBatchDoneMessage, FixBatchDonePayload,
+    ConfirmPageFixMessage,
+    UndoFixMessage,
 )
 from engine.text_measurer import measure_svg_text
 
@@ -67,6 +72,29 @@ logger = logging.getLogger("slidewise")
 
 app = FastAPI(title="SlideWise", version="0.1.0")
 session_mgr = SessionManager.get_instance()
+
+# ---------------------------------------------------------------------------
+# Agent message helpers
+# ---------------------------------------------------------------------------
+
+async def send_agent_thinking(ws, agent: str, text: str = "", tool_name: str = "", tool_args: str = ""):
+    """Send an agent thinking/tool-call update to the frontend."""
+    try:
+        await ws.send_json(AgentThinkingMessage(
+            data=AgentThinkingPayload(agent=agent, text=text, tool_name=tool_name, tool_args=tool_args)
+        ).model_dump())
+    except Exception:
+        pass
+
+async def send_agent_message(ws, agent: str, text: str):
+    """Send an agent natural-language message to the frontend."""
+    try:
+        await ws.send_json(AgentMessageMessage(
+            data=AgentMessagePayload(agent=agent, text=text)
+        ).model_dump())
+    except Exception:
+        pass
+
 
 # Serve frontend
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
@@ -156,7 +184,13 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
             msg_type = raw.get("type", "")
 
             if msg_type == MessageType.USER_MESSAGE:
-                await handle_user_message(ws, raw, executor, session_id)
+                # Route based on current phase
+                state = session_mgr.get_state(session_id)
+                current_phase = state.get("phase", "idle") if state else "idle"
+                if current_phase == "reviewing":
+                    await handle_review_feedback(ws, raw, executor, session_id)
+                else:
+                    await handle_user_message(ws, raw, executor, session_id)
 
             elif msg_type == MessageType.CONFIRM_OUTLINE:
                 await handle_confirm_outline(ws, raw, executor, session_id)
@@ -177,6 +211,12 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
             elif msg_type == MessageType.CANCEL:
                 session_mgr.cancel(session_id)
                 logger.info(f"Session {session_id} cancelled by user")
+
+            elif msg_type == "confirm_page_fix":
+                await handle_confirm_page_fix(ws, raw, executor, session_id)
+
+            elif msg_type == "undo_fix":
+                await handle_undo_fix(ws, executor, session_id)
 
             else:
                 await ws.send_json({
@@ -286,6 +326,14 @@ async def handle_user_message(ws: WebSocket, raw: dict, executor: SandboxedExecu
         repo_hint += "\nA code repository is available at sources/repo/ — read its README and key files."
 
     agent = StrategistAgent(executor)
+
+    await send_agent_thinking(ws, "strategist", "正在分析您的需求...")
+    if github_url:
+        await send_agent_thinking(ws, "strategist", f"正在读取代码仓库 {github_url}")
+    if files:
+        file_names = [f.get("name", "?") for f in files]
+        await send_agent_thinking(ws, "strategist", f"正在处理文件: {', '.join(file_names)}")
+
     try:
         response = await asyncio.to_thread(
             agent.run,
@@ -322,6 +370,14 @@ async def handle_user_message(ws: WebSocket, raw: dict, executor: SandboxedExecu
 
     # Save design_spec to state
     session_mgr.update_phase(session_id, "planning")
+
+    # Agent message with summary
+    total = len(outline_data.get("pages", []))
+    palette = outline_data.get("meta", {}).get("palette", "indigo")
+    await send_agent_message(ws, "strategist",
+        f"分析完成！建议 {total} 页，使用 {palette} 风格。\n"
+        f"请检查下方大纲，可在输入框中用文字告诉我需要修改的地方，或直接确认开始生成。"
+    )
 
     # Send outline to frontend
     pages = [
@@ -402,6 +458,8 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
 
     session_mgr.reset_cancelled(session_id)
 
+    await send_agent_message(ws, "generator", f"开始生成 {total} 页幻灯片...")
+
     for i, page in enumerate(pages):
         if session_mgr.is_cancelled(session_id):
             logger.info(f"Generation cancelled by user at slide {i+1}/{total}")
@@ -413,6 +471,8 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
         try:
             idx = page.get("index", i + 1)
             svg_content = ""
+
+            await send_agent_thinking(ws, "generator", f"正在生成第 {idx}/{total} 页: {page.get('title', '')}", tool_name="generate_svg")
 
             for retry in range(2):  # max 2 attempts
                 user_prompt = gen_agent.build_prompt(
@@ -475,9 +535,13 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
                 data=ErrorPayload(message=f"Failed to generate slide {i+1}: {e}", phase="generating")
             ).model_dump())
 
+    await send_agent_message(ws, "generator", f"全部 {total} 页生成完毕！交由 Reviewer 审查...")
+
     # Auto-trigger Reviewer
     session_mgr.update_phase(session_id, "reviewing")
     session_mgr.update_review(session_id, 1)
+
+    await send_agent_thinking(ws, "reviewer", "正在审查内容逻辑与信息层级...")
 
     reviewer = ReviewerAgent(executor)
     summaries = build_slide_summaries(generated_slides)
@@ -520,6 +584,19 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
                 "description": f"PIL measured overflow: '{m.text[:30]}...' ({m.measured_width:.0f}px) in container ({m.container_width:.0f}px, {m.overflow_ratio-1:.0%})",
                 "suggestion": "Shorten text or reduce font size to fit container",
             })
+
+    # Reviewer speaks
+    issue_count = len(review_data.get("issues", []))
+    if issue_count == 0:
+        await send_agent_message(ws, "reviewer", "审查完成，所有页面均通过检查！可以直接导出。")
+    else:
+        errors = sum(1 for i in review_data.get("issues", []) if i.get("severity") == "error")
+        warnings = sum(1 for i in review_data.get("issues", []) if i.get("severity") == "warning")
+        await send_agent_message(ws, "reviewer",
+            f"审查完成，发现 {issue_count} 个问题"
+            + (f"（{errors} 严重" + (f", {warnings} 警告" if warnings else "") + "）" if errors else "")
+            + "。请在下方查看并决定如何处理。"
+        )
 
     # Save review data for fix cycle
     executor.write_file("review_report.json", json.dumps(review_data, ensure_ascii=False, indent=2))
@@ -566,18 +643,6 @@ async def handle_fix_decisions(ws: WebSocket, raw: dict, executor: SandboxedExec
         review_data = {"issues": [], "round": 0}
 
     current_round = review_data.get("round", 0) + 1
-    max_rounds = 3
-    if current_round > max_rounds:
-        await ws.send_json(ErrorMessage(
-            data=ErrorPayload(
-                message=f"Max review rounds ({max_rounds}) reached. Remaining issues marked for manual fix.",
-                phase="reviewing", recoverable=False,
-            )
-        ).model_dump())
-        # Proceed to export anyway
-        await _do_export(ws, executor, session_id)
-        return
-
     session_mgr.update_phase(session_id, "generating")
     session_mgr.update_review(session_id, current_round)
 
@@ -597,16 +662,32 @@ async def handle_fix_decisions(ws: WebSocket, raw: dict, executor: SandboxedExec
         if pg in fix_pages:
             issues_by_page.setdefault(pg, []).append(iss)
 
-    # Load existing SVGs for style context
+    # Parse structured feedback: extract per-page notes from the combined string.
+    global_feedback = feedback.strip() if feedback else ""
+    per_page_feedback: dict = {}
+    if feedback:
+        for m in re.finditer(r'\[\u7b2c(\d+)\u9875\]\s*(.*)', feedback):
+            pg_num = int(m.group(1))
+            per_page_feedback[pg_num] = m.group(2).strip()
+        first_bracket = feedback.find("[\u7b2c")
+        if first_bracket > 0:
+            global_feedback = feedback[:first_bracket].strip()
+        elif first_bracket == 0:
+            global_feedback = ""
+
+    # Load existing SVGs for style context (include ALL slides as anchors)
     previous_slides = []
     for f in sorted(executor.list_dir("svg_output")):
-        if f.endswith(".svg"):
+        if f.endswith(".svg") and ".before_fix" not in f:
             try:
-                content = executor.read_file(f"svg_output/{f}")
+                content_f = executor.read_file(f"svg_output/{f}")
                 idx_match = re.search(r'slide_(\d+)', f)
                 idx = int(idx_match.group(1)) if idx_match else 0
-                if idx not in fix_pages:
-                    previous_slides.append({"index": idx, "svg": content, "layout": ""})
+                layout = ""
+                page_info = pages_lookup.get(idx, {})
+                if page_info:
+                    layout = page_info.get("layout", "")
+                previous_slides.append({"index": idx, "svg": content_f, "layout": layout})
             except Exception:
                 pass
 
@@ -617,6 +698,10 @@ async def handle_fix_decisions(ws: WebSocket, raw: dict, executor: SandboxedExec
     except Exception:
         pass
 
+    await send_agent_message(ws, "reviewer", f"正在修复 {len(fix_pages)} 页...")
+
+    fixed_pages_list = []
+
     for pg in fix_pages:
         page_info = pages_lookup.get(pg, {"title": f"Slide {pg}", "layout": "L3", "bullets": []})
         page_feedback = "\n".join(
@@ -624,10 +709,23 @@ async def handle_fix_decisions(ws: WebSocket, raw: dict, executor: SandboxedExec
             f"  Suggested fix: {iss.get('suggestion', 'N/A')}"
             for iss in issues_by_page.get(pg, [])
         )
-        if feedback:
-            page_feedback = f"User feedback: {feedback}\n\n{page_feedback}"
+        pg_user = per_page_feedback.get(pg, "")
+        if pg_user:
+            page_feedback = f"User feedback for this page: {pg_user}\n\n{page_feedback}"
+        if global_feedback:
+            page_feedback = f"User feedback: {global_feedback}\n\n{page_feedback}"
 
         try:
+            # Backup current SVG before fixing
+            backup_path = f"svg_output/slide_{pg:02d}.before_fix.svg"
+            try:
+                old_svg = executor.read_file(f"svg_output/slide_{pg:02d}.svg")
+                executor.write_file(backup_path, old_svg)
+            except Exception:
+                old_svg = ""
+
+            await send_agent_thinking(ws, "generator", f"正在修复第 {pg} 页: {page_info.get('title', '')}", tool_name="fix_svg")
+
             user_prompt = gen_agent.build_prompt(
                 mode="fix_specific_pages",
                 design_spec=design_spec,
@@ -642,6 +740,7 @@ async def handle_fix_decisions(ws: WebSocket, raw: dict, executor: SandboxedExec
                 svg_content = svg_response
 
             executor.write_file(f"svg_output/slide_{pg:02d}.svg", svg_content)
+            fixed_pages_list.append(pg)
 
             await ws.send_json(SlideFixedMessage(
                 data=SlideFixedPayload(index=pg, svg=svg_content, fix_round=current_round)
@@ -651,6 +750,7 @@ async def handle_fix_decisions(ws: WebSocket, raw: dict, executor: SandboxedExec
             logger.error(f"Fix error on slide {pg}: {e}")
 
     # Re-run Reviewer
+    await send_agent_thinking(ws, "reviewer", "正在重新审查修复后的页面...")
     session_mgr.update_phase(session_id, "reviewing")
     reviewer = ReviewerAgent(executor)
     try:
@@ -666,26 +766,312 @@ async def handle_fix_decisions(ws: WebSocket, raw: dict, executor: SandboxedExec
     new_review["round"] = current_round
     executor.write_file("review_report.json", json.dumps(new_review, ensure_ascii=False, indent=2))
 
-    issues = [
-        ReviewIssue(
-            page=iss.get("page", 0),
-            severity=iss.get("severity", "warning"),
-            category=iss.get("category", "layout"),
-            description=iss.get("description", ""),
-            suggestion=iss.get("suggestion", ""),
-            element_id=iss.get("element_id", ""),
-        )
-        for iss in new_review.get("issues", [])
-    ]
+    remaining = len(new_review.get("issues", []))
 
-    await ws.send_json(ReviewReportMessage(
-        data=ReviewReportPayload(
-            issues=issues,
-            summary=new_review.get("summary", ""),
-            current_round=current_round,
-            max_rounds=max_rounds,
+    if remaining == 0:
+        await send_agent_message(ws, "reviewer", "所有问题已修复！可以导出了。")
+    else:
+        await send_agent_message(ws, "reviewer",
+            f"修复完成，还剩 {remaining} 个问题。请查看并决定是否继续修复或直接导出。"
         )
+
+    # Send batch done — user decides next step via FixBatchDoneCard
+    await ws.send_json(FixBatchDoneMessage(
+        data=FixBatchDonePayload(fixed_pages=fixed_pages_list, total_issues_remaining=remaining)
     ).model_dump())
+
+
+async def handle_confirm_page_fix(ws: WebSocket, raw: dict, executor: SandboxedExecutor, session_id: str):
+    """User confirms or rejects a single page fix."""
+    msg = ConfirmPageFixMessage(**raw)
+    idx = msg.data.index
+    approved = msg.data.approved
+    feedback = msg.data.feedback
+
+    if approved:
+        # Page is good, keep the fix
+        # Delete backup
+        try:
+            backup = f"svg_output/slide_{idx:02d}.before_fix.svg"
+            executor.delete_file(backup)
+        except Exception:
+            pass
+        await send_agent_message(ws, "reviewer", f"第 {idx} 页已确认。")
+    else:
+        # User wants to re-fix or revert
+        if "放弃" in feedback or "revert" in feedback.lower():
+            # Revert to pre-fix version
+            try:
+                old_svg = executor.read_file(f"svg_output/slide_{idx:02d}.before_fix.svg")
+                executor.write_file(f"svg_output/slide_{idx:02d}.svg", old_svg)
+                await ws.send_json(SlideFixedMessage(
+                    data=SlideFixedPayload(index=idx, svg=old_svg, fix_round=0)
+                ).model_dump())
+                await send_agent_message(ws, "reviewer", f"第 {idx} 页已回退到修复前版本。")
+            except Exception:
+                await send_agent_message(ws, "reviewer", f"第 {idx} 页无法回退（备份不存在）。")
+        else:
+            # Re-fix with new feedback - delegate to fix flow
+            await send_agent_message(ws, "reviewer", f"收到，正在根据意见重新修复第 {idx} 页...")
+            # We can reuse the fix logic by calling a mini fix
+            try:
+                gen_agent = GeneratorAgent(executor)
+                design_spec = ""
+                try:
+                    design_spec = executor.read_file("design_spec.md")
+                except Exception:
+                    pass
+                try:
+                    outline_data = json.loads(executor.read_file("outline_confirmed.json"))
+                except Exception:
+                    outline_data = {"pages": []}
+                pages_lookup = {p.get("index"): p for p in outline_data.get("pages", [])}
+                page_info = pages_lookup.get(idx, {"title": f"Slide {idx}", "layout": "L3", "bullets": []})
+                meta = outline_data.get("meta") or {}
+                palette = meta.get("palette", "indigo") if isinstance(meta, dict) else "indigo"
+
+                page_feedback = f"User feedback: {feedback}"
+
+                await send_agent_thinking(ws, "generator", f"正在重新修复第 {idx} 页...", tool_name="fix_svg")
+
+                user_prompt = gen_agent.build_prompt(
+                    mode="fix_specific_pages",
+                    design_spec=design_spec,
+                    page_outline=page_info,
+                    previous_slides=[],
+                    review_feedback=page_feedback,
+                    palette=palette,
+                )
+                svg_response = await asyncio.to_thread(gen_agent.run, user_prompt)
+                svg_content = _extract_svg(svg_response)
+                if not svg_content:
+                    svg_content = svg_response
+                executor.write_file(f"svg_output/slide_{idx:02d}.svg", svg_content)
+
+                await ws.send_json(SlideFixedMessage(
+                    data=SlideFixedPayload(index=idx, svg=svg_content, fix_round=0)
+                ).model_dump())
+                await send_agent_message(ws, "reviewer", f"第 {idx} 页已重新修复，请查看。")
+            except Exception as e:
+                logger.error(f"Re-fix error on slide {idx}: {e}")
+                await send_agent_message(ws, "reviewer", f"重新修复失败: {e}")
+
+
+async def handle_undo_fix(ws: WebSocket, executor: SandboxedExecutor, session_id: str):
+    """User wants to revert all fixes from the last round."""
+    # Restore all .before_fix.svg backups
+    restored = []
+    try:
+        for f in executor.list_dir("svg_output"):
+            if f.endswith(".before_fix.svg"):
+                idx_match = re.search(r'slide_(\d+)', f)
+                if idx_match:
+                    idx = int(idx_match.group(1))
+                    old_svg = executor.read_file(f"svg_output/{f}")
+                    executor.write_file(f"svg_output/slide_{idx:02d}.svg", old_svg)
+                    restored.append(idx)
+                    # Send updated slide to frontend
+                    await ws.send_json(SlideFixedMessage(
+                        data=SlideFixedPayload(index=idx, svg=old_svg, fix_round=0)
+                    ).model_dump())
+                    # Clean up backup
+                    executor.delete_file(f"svg_output/{f}")
+    except Exception as e:
+        logger.error(f"Undo fix error: {e}")
+
+    session_mgr.update_phase(session_id, "reviewing")
+
+    if restored:
+        await send_agent_message(ws, "reviewer", f"已回退 {len(restored)} 页到修复前版本（第 {restored} 页）。正在重新审查...")
+
+        # Delete old review report to prevent stale data
+        try:
+            executor.delete_file("review_report.json")
+        except Exception:
+            pass
+
+        # Re-run Reviewer on the reverted SVGs
+        await send_agent_thinking(ws, "reviewer", "正在重新审查回退后的页面...")
+        reviewer = ReviewerAgent(executor)
+        # Rebuild summaries from current SVG files
+        from agents.reviewer import build_slide_summaries
+        current_slides = []
+        for f in sorted(executor.list_dir("svg_output")):
+            if f.endswith(".svg") and ".before_fix" not in f:
+                try:
+                    svg_content = executor.read_file(f"svg_output/{f}")
+                    idx_match = re.search(r'slide_(\d+)', f)
+                    idx = int(idx_match.group(1)) if idx_match else 0
+                    current_slides.append({"index": idx, "svg": svg_content, "layout": "", "title": ""})
+                except Exception:
+                    pass
+
+        summaries = build_slide_summaries(current_slides)
+        try:
+            review_response = await asyncio.to_thread(
+                reviewer.run,
+                f"Review these slide summaries and report content/hierarchy issues:\n\n"
+                f"{json.dumps(summaries, ensure_ascii=False, indent=2)}"
+            )
+            new_review = reviewer.parse_review_report(review_response)
+        except Exception as e:
+            logger.error(f"Re-review after undo failed: {e}")
+            new_review = {"issues": [], "summary": f"Re-review failed: {e}"}
+
+        new_review["round"] = 0
+        executor.write_file("review_report.json", json.dumps(new_review, ensure_ascii=False, indent=2))
+
+        issues = [
+            ReviewIssue(
+                page=iss.get("page", 0),
+                severity=iss.get("severity", "warning"),
+                category=iss.get("category", "layout"),
+                description=iss.get("description", ""),
+                suggestion=iss.get("suggestion", ""),
+                element_id=iss.get("element_id", ""),
+            )
+            for iss in new_review.get("issues", [])
+        ]
+
+        await ws.send_json(ReviewReportMessage(
+            data=ReviewReportPayload(
+                issues=issues,
+                summary=new_review.get("summary", ""),
+                current_round=0,
+                max_rounds=999,
+            )
+        ).model_dump())
+
+        issue_count = len(issues)
+        if issue_count == 0:
+            await send_agent_message(ws, "reviewer", "回退完成，重新审查通过，没有问题。可以直接导出。")
+        else:
+            await send_agent_message(ws, "reviewer", f"回退完成，重新审查发现 {issue_count} 个问题。请查看。")
+    else:
+        await send_agent_message(ws, "reviewer", "没有可回退的修复。")
+
+
+async def handle_review_feedback(ws: WebSocket, raw: dict, executor: SandboxedExecutor, session_id: str):
+    """During review phase, user sends text feedback. Reviewer interprets and acts."""
+    msg = UserMessageMessage(**raw)
+    text = msg.data.text.strip()
+    if not text:
+        return
+
+    # Load current review data for context
+    try:
+        review_data = json.loads(executor.read_file("review_report.json"))
+    except Exception:
+        review_data = {"issues": []}
+    issues = review_data.get("issues", [])
+
+    # Load outline for page info
+    try:
+        outline_data = json.loads(executor.read_file("outline_confirmed.json"))
+    except Exception:
+        outline_data = {"pages": []}
+
+    # Build context for the Reviewer to interpret user intent
+    issues_summary = "\n".join(
+        f"- Page {iss.get('page')} [{iss.get('severity')}] {iss.get('category')}: {iss.get('description')}"
+        for iss in issues
+    ) if issues else "No issues found."
+
+    pages_summary = "\n".join(
+        f"- Page {p.get('index')}: {p.get('title')} ({p.get('layout')})"
+        for p in outline_data.get("pages", [])
+    )
+
+    await send_agent_thinking(ws, "reviewer", "正在理解您的意图...")
+
+    # Use Reviewer to interpret user intent and produce a structured action
+    reviewer = ReviewerAgent(executor)
+    interpret_prompt = (
+        f"A user is reviewing generated slides and has sent this message:\n\n"
+        f"\"\"\"\n{text}\n\"\"\"\n\n"
+        f"Current issues found:\n{issues_summary}\n\n"
+        f"Pages:\n{pages_summary}\n\n"
+        f"Interpret the user\'s intent and return a JSON action:\n"
+        f'- If they want to fix specific pages: {{"action": "fix", "pages": [3, 5], "instructions": "what to change"}}\n'
+        f'- If they want to fix all issues: {{"action": "fix_all", "instructions": "what to change"}}\n'
+        f'- If they want to skip and export: {{"action": "export"}}\n'
+        f'- If they have a question or comment: {{"action": "reply", "message": "your response to the user"}}\n'
+        f'- If they want to undo recent fixes: {{"action": "undo"}}\n\n'
+        f"Return ONLY the JSON object, nothing else."
+    )
+
+    try:
+        response = await asyncio.to_thread(reviewer.run, interpret_prompt)
+        action = reviewer.parse_review_report(response)  # reuse JSON parser
+        # parse_review_report looks for "issues" key, but we need generic JSON
+        # Try direct parse
+        import json as _json
+        try:
+            # Try to find JSON in response
+            for m in re.finditer(r'\{', response):
+                depth = 1
+                i = m.start() + 1
+                while i < len(response) and depth > 0:
+                    if response[i] == '{': depth += 1
+                    elif response[i] == '}': depth -= 1
+                    i += 1
+                if depth == 0:
+                    candidate = response[m.start():i]
+                    try:
+                        action = _json.loads(candidate)
+                        break
+                    except _json.JSONDecodeError:
+                        continue
+            else:
+                action = {"action": "reply", "message": response[:300]}
+        except Exception:
+            action = {"action": "reply", "message": response[:300]}
+    except Exception as e:
+        logger.error(f"Reviewer interpretation error: {e}")
+        action = {"action": "reply", "message": f"无法理解您的意图: {e}"}
+
+    act = action.get("action", "reply")
+
+    if act == "fix":
+        pages = action.get("pages", [])
+        instructions = action.get("instructions", text)
+        if pages:
+            await send_agent_message(ws, "reviewer", f"好的，正在修复第 {pages} 页...")
+            # Delegate to fix flow
+            fake_fix = FixDecisionsMessage(**{
+                "type": "fix_decisions",
+                "data": {"fix": pages, "ignore": [], "feedback": instructions}
+            })
+            await handle_fix_decisions(ws, fake_fix.model_dump(), executor, session_id)
+        else:
+            await send_agent_message(ws, "reviewer", "请指定需要修复的页面。")
+
+    elif act == "fix_all":
+        instructions = action.get("instructions", text)
+        all_pages = list(set(iss.get("page", 0) for iss in issues))
+        if all_pages:
+            await send_agent_message(ws, "reviewer", f"好的，正在修复全部 {len(all_pages)} 个问题页面...")
+            fake_fix = FixDecisionsMessage(**{
+                "type": "fix_decisions",
+                "data": {"fix": all_pages, "ignore": [], "feedback": instructions}
+            })
+            await handle_fix_decisions(ws, fake_fix.model_dump(), executor, session_id)
+        else:
+            await send_agent_message(ws, "reviewer", "没有需要修复的问题。")
+
+    elif act == "export":
+        await send_agent_message(ws, "reviewer", "好的，跳过修复，直接导出。")
+        await _do_export(ws, executor, session_id)
+
+    elif act == "undo":
+        await handle_undo_fix(ws, executor, session_id)
+
+    elif act == "reply":
+        reply_msg = action.get("message", "我不太确定您的意思，能再说详细一些吗？")
+        await send_agent_message(ws, "reviewer", reply_msg)
+
+    else:
+        await send_agent_message(ws, "reviewer", "我不太确定您的意思，能再说详细一些吗？")
 
 
 async def handle_download(ws: WebSocket, executor: SandboxedExecutor, session_id: str):
@@ -735,6 +1121,20 @@ async def _do_export(ws: WebSocket, executor: SandboxedExecutor, session_id: str
     if pptx_files:
         filename = pptx_files[0].name
         session_mgr.set_export(session_id, filename)
+
+        # Strategist closing message
+        try:
+            outline_data = json.loads(executor.read_file("outline_confirmed.json"))
+            total = len(outline_data.get("pages", []))
+            palette = outline_data.get("meta", {}).get("palette", "indigo")
+        except Exception:
+            total = "?"
+            palette = "indigo"
+        await send_agent_message(ws, "generator",
+            f"PPT 已生成完毕！共 {total} 页，使用 {palette} 风格。\n"
+            f"所有元素均为原生 PowerPoint 形状，可直接编辑。"
+        )
+
         await ws.send_json(DoneMessage(
             data=DonePayload(
                 download_url=f"/download/{session_id}",
