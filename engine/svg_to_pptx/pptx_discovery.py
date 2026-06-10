@@ -6,6 +6,9 @@ import re
 from pathlib import Path
 
 
+_EXPORT_SLIDE_RE = re.compile(r"^slide_\d+\.svg$", re.IGNORECASE)
+
+
 def find_svg_files(
     project_path: Path,
     source: str = 'output',
@@ -42,7 +45,8 @@ def find_svg_files(
         else:
             return [], ''
 
-    return sorted(svg_dir.glob('*.svg')), dir_name
+    svg_files = [p for p in svg_dir.glob('*.svg') if _EXPORT_SLIDE_RE.match(p.name)]
+    return sorted(svg_files), dir_name
 
 
 def find_notes_files(

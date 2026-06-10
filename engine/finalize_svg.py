@@ -30,6 +30,7 @@ import os
 import sys
 import shutil
 import argparse
+import re
 from pathlib import Path
 
 # Import finalize helpers from the internal package.
@@ -40,6 +41,14 @@ from svg_finalize.embed_images import embed_images_in_svg
 from svg_finalize.fix_image_aspect import fix_image_aspect_in_svg
 from svg_finalize.resolve_overlaps import resolve_text_overlaps
 from text_measurer import optimize_svg_text_sizes
+
+
+_EXPORT_SLIDE_RE = re.compile(r"^slide_\d+\.svg$", re.IGNORECASE)
+
+
+def is_export_slide(svg_file: Path) -> bool:
+    """Return True for official slide files, excluding review backups."""
+    return bool(_EXPORT_SLIDE_RE.match(svg_file.name))
 
 
 def safe_print(text: str) -> None:
@@ -163,8 +172,9 @@ def finalize_project(
         safe_print(f"[ERROR] svg_output directory not found: {svg_output}")
         return False
 
-    # Get list of SVG files
-    svg_files = list(svg_output.glob('*.svg'))
+    # Get list of official SVG files. Review backups such as
+    # slide_02.before_fix.svg must never become exported slides.
+    svg_files = [p for p in svg_output.glob('*.svg') if is_export_slide(p)]
     if not svg_files:
         safe_print(f"[ERROR] No SVG files in svg_output")
         return False
@@ -178,10 +188,12 @@ def finalize_project(
         safe_print("[PREVIEW] Preview mode, no operations will be performed")
         return True
 
-    # Step 1: Copy directory
+    # Step 1: Copy official slide SVGs only
     if svg_final.exists():
         shutil.rmtree(svg_final)
-    shutil.copytree(svg_output, svg_final)
+    svg_final.mkdir(parents=True, exist_ok=True)
+    for svg_file in svg_files:
+        shutil.copy2(svg_file, svg_final / svg_file.name)
 
     if not quiet:
         print()

@@ -41,6 +41,7 @@ from agents.strategist import StrategistAgent
 from agents.generator import GeneratorAgent, extract_svg_from_response
 from agents.reviewer import ReviewerAgent, build_slide_summaries
 from constraints.validator import ConstraintValidator
+from constraints.guizang import PALETTES, get_page_colors
 from protocols.websocket import (
     MessageType, WSProtocol,
     OutlineMessage, OutlinePayload, OutlinePage,
@@ -169,6 +170,62 @@ def _load_current_slides(executor: SandboxedExecutor) -> List[dict]:
             except Exception:
                 pass
     return slides
+
+
+def _infer_palette_from_design_spec(design_spec: str) -> str:
+    """Recover the selected Guizang palette from design_spec.md text."""
+    if not design_spec:
+        return "indigo"
+    lowered = design_spec.lower()
+    for palette_id in PALETTES:
+        if re.search(rf'palette\W*[:：]\W*{re.escape(palette_id)}\b', lowered):
+            return palette_id
+    for palette_id in PALETTES:
+        if re.search(rf'\b{re.escape(palette_id)}\b', lowered):
+            return palette_id
+    return "indigo"
+
+
+def _ensure_outline_meta(outline: dict, design_spec: str = "") -> dict:
+    """Ensure outline JSON keeps deck-level metadata even after frontend edits."""
+    if not isinstance(outline, dict):
+        outline = {"pages": []}
+    meta = outline.get("meta")
+    if not isinstance(meta, dict):
+        meta = {}
+    if not meta.get("palette"):
+        meta["palette"] = _infer_palette_from_design_spec(design_spec)
+    meta.setdefault("total_pages", len(outline.get("pages", [])))
+    outline["meta"] = meta
+    return outline
+
+
+def _palette_issue(svg_text: str, palette: str, layout: str) -> str:
+    """Return a short reason if an SVG uses colors outside the selected palette."""
+    expected = get_page_colors(palette, layout)
+    allowed = {
+        c.lower()
+        for c in (
+            expected["bg"],
+            expected["text"],
+            expected["anchor"],
+            PALETTES.get(palette, PALETTES["indigo"]).text_secondary,
+            PALETTES.get(palette, PALETTES["indigo"]).surface,
+            PALETTES.get(palette, PALETTES["indigo"]).divider,
+        )
+    }
+    colors = {c.lower() for c in re.findall(r'#[0-9A-Fa-f]{6}', svg_text)}
+    foreign = sorted(c for c in colors if c not in allowed)
+    bg_match = re.search(
+        r'<rect\b(?=[^>]*\bwidth="1280")(?=[^>]*\bheight="720")[^>]*\bfill="(#[0-9A-Fa-f]{6})"',
+        svg_text,
+        re.IGNORECASE,
+    )
+    if bg_match and bg_match.group(1).lower() != expected["bg"].lower():
+        return f"background {bg_match.group(1)} != expected {expected['bg']}"
+    if foreign:
+        return f"foreign palette colors: {', '.join(foreign[:4])}"
+    return ""
 
 
 # Serve frontend
@@ -433,15 +490,17 @@ async def handle_user_message(ws: WebSocket, raw: dict, executor: SandboxedExecu
         ).model_dump())
         return
 
-    # Save outline for subsequent phases
-    executor.write_file("outline_confirmed.json", json.dumps(outline_data, ensure_ascii=False, indent=2))
-
     # Read design_spec.md
     design_spec_content = ""
     try:
         design_spec_content = executor.read_file("design_spec.md")
     except Exception:
         pass
+
+    outline_data = _ensure_outline_meta(outline_data, design_spec_content)
+
+    # Save outline for subsequent phases
+    executor.write_file("outline_confirmed.json", json.dumps(outline_data, ensure_ascii=False, indent=2))
 
     # Save design_spec to state
     session_mgr.update_phase(session_id, "planning")
@@ -485,8 +544,25 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
 
     if not msg.data.approved and msg.data.modified_outline:
         # User modified the outline — save it
+        existing_meta = {}
+        try:
+            existing_outline = json.loads(executor.read_file("outline_confirmed.json"))
+            if isinstance(existing_outline.get("meta"), dict):
+                existing_meta = existing_outline["meta"]
+        except Exception:
+            pass
+        try:
+            design_spec_for_meta = executor.read_file("design_spec.md")
+        except Exception:
+            design_spec_for_meta = ""
         outline_json = json.dumps(
-            {"pages": [p.model_dump() for p in msg.data.modified_outline]},
+            _ensure_outline_meta(
+                {
+                    "meta": existing_meta,
+                    "pages": [p.model_dump() for p in msg.data.modified_outline],
+                },
+                design_spec_for_meta,
+            ),
             ensure_ascii=False, indent=2,
         )
         executor.write_file("outline_confirmed.json", outline_json)
@@ -497,11 +573,13 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
     try:
         outline_raw = executor.read_file("outline_confirmed.json")
         outline = json.loads(outline_raw)
+        outline = _ensure_outline_meta(outline, executor.read_file("design_spec.md"))
+        executor.write_file("outline_confirmed.json", json.dumps(outline, ensure_ascii=False, indent=2))
     except Exception:
         # Fallback: read design_spec.md and parse outline
         try:
             spec = executor.read_file("design_spec.md")
-            outline = {"pages": _parse_pages_from_spec(spec)}
+            outline = _ensure_outline_meta({"pages": _parse_pages_from_spec(spec)}, spec)
             executor.write_file("outline_confirmed.json", json.dumps(outline, ensure_ascii=False, indent=2))
         except Exception as e:
             await ws.send_json(ErrorMessage(
@@ -546,6 +624,7 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
         try:
             idx = page.get("index", i + 1)
             svg_content = ""
+            palette_feedback = ""
 
             await send_agent_thinking(ws, "generator", f"正在生成第 {idx}/{total} 页: {page.get('title', '')}", tool_name="generate_svg")
 
@@ -555,6 +634,7 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
                     design_spec=design_spec if retry == 0 else "",
                     page_outline=page,
                     previous_slides=previous_slides,
+                    review_feedback=palette_feedback or None,
                     palette=palette,
                 )
                 svg_response = await asyncio.to_thread(gen_agent.run, user_prompt)
@@ -579,8 +659,13 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
                 is_svg = "<svg" in svg_content[:200]
                 has_forbidden = any(f in svg_content for f in FORBIDDEN_IN_SVG)
                 too_short = len(svg_content) < SVG_MIN_CHARS
+                palette_issue = "" if not is_svg else _palette_issue(
+                    svg_content,
+                    palette,
+                    page.get("layout", "L3"),
+                )
 
-                if is_svg and not too_short and not has_forbidden:
+                if is_svg and not too_short and not has_forbidden and not palette_issue:
                     break
                 if not is_svg:
                     logger.warning(f"Slide {idx} attempt {retry+1}: response is not SVG (starts with: {svg_content[:80]})")
@@ -588,6 +673,17 @@ async def handle_confirm_outline(ws: WebSocket, raw: dict, executor: SandboxedEx
                     logger.warning(f"Slide {idx} attempt {retry+1}: contains forbidden SVG elements, retrying...")
                 if too_short:
                     logger.warning(f"Slide {idx} attempt {retry+1}: SVG too short ({len(svg_content)} chars), retrying...")
+                if palette_issue:
+                    expected = get_page_colors(palette, page.get("layout", "L3"))
+                    palette_feedback = (
+                        "Palette compliance failure. Regenerate this slide using ONLY "
+                        f"the selected deck palette '{palette}'. Expected full-page "
+                        f"background {expected['bg']}, text {expected['text']}, "
+                        f"accent {expected['anchor']}. Problem: {palette_issue}."
+                    )
+                    logger.warning(
+                        f"Slide {idx} attempt {retry+1}: palette mismatch ({palette_issue}), retrying..."
+                    )
 
             # Save SVG
             svg_path = f"svg_output/slide_{idx:02d}.svg"

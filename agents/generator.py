@@ -205,6 +205,10 @@ class GeneratorAgent(BaseAgent):
         from constraints.guizang import get_palette, get_page_colors
         p = get_palette(palette)
         colors = get_page_colors(palette, layout)
+        allowed_colors = [
+            colors["bg"], colors["text"], colors["anchor"],
+            p.text_secondary, p.surface, p.divider,
+        ]
         page_type_hint = (
             "HERO (dark background)"
             if layout in ("L1", "L2", "L7") else
@@ -223,9 +227,14 @@ class GeneratorAgent(BaseAgent):
         if design_spec and not previous_slides:
             parts.append(f"## DESIGN SPECIFICATION\n{design_spec[:3000]}")
 
-        # Previous slides as style anchors (rolling window: last 3)
+        # Previous slides are structure anchors only; colors are locked below.
         if previous_slides:
-            parts.append("## PREVIOUS SLIDES (style anchors — match this visual style)")
+            parts.append(
+                "## PREVIOUS SLIDES (structure anchors only)\n"
+                "Use these slides for spacing rhythm, typography hierarchy, and "
+                "element density. Do NOT copy their background/text colors; the "
+                "current page colors below are mandatory."
+            )
             for ps in previous_slides[-3:]:
                 svg_preview = ps['svg'][:600] if len(ps['svg']) > 600 else ps['svg']
                 parts.append(
@@ -240,7 +249,9 @@ class GeneratorAgent(BaseAgent):
             f"Background (fill full 1280×720 rect): {colors['bg']}\n"
             f"Text (all <text> elements): {colors['text']}\n"
             f"Accent (bullet markers, rules, data highlights): {colors['anchor']}\n"
-            f"Use ONLY these three colors for this page. No other palette."
+            f"Allowed HEX colors for this page: {', '.join(allowed_colors)}\n"
+            f"The first <rect> MUST be width=\"1280\" height=\"720\" fill=\"{colors['bg']}\".\n"
+            f"Do not use colors from another palette."
         )
 
         parts.append(f"## CURRENT PAGE — Slide {idx}")
