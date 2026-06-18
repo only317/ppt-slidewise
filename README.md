@@ -1,7 +1,7 @@
 ﻿# SlideWise
 
 > Agent-driven PPT generation with Guizang aesthetics. Chat with AI -> get a truly editable `.pptx`.  
-> 计算机图形学 Project 3 — 生成式AI实践
+> 复旦大学计算机图形学 Project 3 — 生成式AI实践
 
 Drop a PDF, paste a GitHub link, upload a ZIP, or just type a topic. SlideWise generates a professionally styled `.pptx` — every text box and shape is a native PowerPoint object.
 
@@ -52,11 +52,10 @@ Generator fixes → user confirms → export .pptx
 
 All interactions happen in the chat panel. Users can:
 - Edit outline titles/layouts directly, or describe changes in natural language
-- See agent thinking process (tool calls, file reads) in collapsible bubbles
+- See agent thinking process or working in collapsible bubbles
 - Review issues per-page with severity indicators on slide previews
 - Fix selectively, add per-page or global feedback
-- Undo all fixes to revert to pre-fix version
-- Compare old vs new versions after each fix
+- Undo the fixes to revert to pre-fix version
 - Skip review and export directly at any point
 
 ## Style System
